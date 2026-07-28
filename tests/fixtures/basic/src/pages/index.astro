@@ -1,0 +1,60 @@
+---
+import Card from "../components/Card.astro";
+import ReactIsland from "../components/ReactIsland";
+import ForwardedButton from "../../../shared/ForwardedButton.astro";
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Astro AI Locator Fixture</title>
+  </head>
+  <body>
+    <main>
+      <h1>Locator fixture</h1>
+      <Card />
+      <ForwardedButton data-testid="forwarded-button">
+        Forwarded component button
+      </ForwardedButton>
+      <ReactIsland client:only="react" />
+    </main>
+  </body>
+</html>
+
+<style is:global>
+  .pseudo-card,
+  .stack-card,
+  .pointer-none-card {
+    position: relative;
+    width: 320px;
+    min-height: 100px;
+    margin-top: 16px;
+    border: 1px solid #ddd;
+  }
+
+  .pseudo-stretched-link::before {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    content: "";
+  }
+
+  [data-testid="pseudo-rating"],
+  [data-testid="stack-rating"] {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+  }
+
+  .stack-overlay {
+    position: absolute;
+    inset: 0;
+  }
+
+  .pointer-none-rating {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    pointer-events: none;
+  }
+</style>

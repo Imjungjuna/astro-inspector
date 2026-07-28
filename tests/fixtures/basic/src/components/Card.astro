@@ -1,0 +1,20 @@
+---
+const cards = ["Alpha", "Beta"];
+---
+
+<section id="card-list">
+  {
+    cards.map((label) => (
+      <article class="card" data-testid={`card-${label.toLowerCase()}`}>
+        <h2>{label}</h2>
+        <button type="button">Choose {label}</button>
+      </article>
+    ))
+  }
+</section>
+
+<style>
+  .card {
+    padding: 16px;
+  }
+</style>

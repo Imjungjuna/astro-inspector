@@ -1,0 +1,12 @@
+{
+  "name": "astro-ai-locator-packed-smoke",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "astro build",
+    "smoke:exports": "node smoke-exports.mjs"
+  },
+  "dependencies": {
+    "astro": "^7.1.3"
+  }
+}
