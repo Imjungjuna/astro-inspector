@@ -6,7 +6,7 @@
 > 누른 채 호버하면 전체 요소·가장 가까운 메타데이터 조상·현재 요소를
 > 구분해 표시한다. 클릭 시 locator hash를 복사하고 MCP가 manifest
 > entry를 조회한다. 마지막 `npm run verify`에서 unit 92개, MCP integration
-> 1개, E2E 29개, production output 1개와 TypeScript build가 통과했다.
+> 1개, E2E 31개, production output 1개와 TypeScript build가 통과했다.
 
 ## 다음 구현 후보
 

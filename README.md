@@ -9,6 +9,7 @@ or a compact source reference straight from the page.
 
 [![Astro](https://img.shields.io/badge/Astro-7.x-BC52EE?logo=astro&logoColor=white)](https://astro.build)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A522.12-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![npm](https://img.shields.io/npm/v/astro-inspector)](https://www.npmjs.com/package/astro-inspector)
 [![MCP](https://img.shields.io/badge/MCP-stdio-000000)](https://modelcontextprotocol.io)
 [![License](https://img.shields.io/badge/License-ISC-blue.svg)](#license)
 

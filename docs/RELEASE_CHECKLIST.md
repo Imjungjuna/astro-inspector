@@ -16,24 +16,15 @@
 
 새 환경에서 `npm install`과 전체 `npm run verify`로 재현성을 검증한다.
 
-### 2. npm에 미발행
+### 2. npm에 미발행 ✅ 해결
 
 ```
-npm view astro-inspector  →  E404 Not Found
+npm view astro-inspector  →  0.1.0
 ```
 
-**증상.** README가 `npm install --save-dev astro-inspector`를 안내하는데
-패키지가 레지스트리에 없다. 저장소를 방문한 사람이 첫 명령에서 막힌다.
-
-**순서.**
-
-1. P0-1을 먼저 고친다. `prepublishOnly`가 `npm run verify`를 실행하므로
-   설치가 깨진 상태로는 publish 자체가 실패한다.
-2. 이름은 `astro-inspector`로 확정했다.
-3. `npm publish --dry-run`으로 `files: ["dist", "README.md"]`가 의도대로
-   묶이는지 확인한다.
-4. 첫 배포는 `0.1.0` 그대로 두되, breaking change 여지를 남기려면
-   `--tag next`로 올리는 것도 방법이다.
+`astro-inspector@0.1.0`을 `latest`로 public 배포했다. 레지스트리에서 새
+임시 Astro 프로젝트에 설치한 뒤 root/client exports, MCP CLI, production
+build까지 확인했다.
 
 ## 🟡 P1 — 공개 저장소로서 빠진 것
 
@@ -73,7 +64,7 @@ GIF가 10MB를 넘으면 GitHub이 렌더링하지 않는다. 폭 800px / 15fps 
 
 - **Topics** — `astro`, `mcp`, `model-context-protocol`, `vite-plugin`,
   `developer-tools`, `inspector`. GitHub 탐색과 검색 유입 경로다.
-- **About** — 설명은 등록됨. 홈페이지 URL은 npm 발행 후 채운다.
+- **About** — 설명과 npm 홈페이지 URL을 등록했다.
 - **CONTRIBUTING.md / 이슈 템플릿** — 외부 기여를 받기 시작하면 추가.
 - **CI** — `npm run verify`를 돌리는 GitHub Actions 워크플로. Playwright
   E2E가 포함되어 있어 `microsoft/playwright-github-action` 또는 브라우저
@@ -84,6 +75,6 @@ GIF가 10MB를 넘으면 GitHub이 렌더링하지 않는다. 폭 800px / 15fps 
 1. ~~P0-1 절대경로 수정과 npm 재설치~~ 완료
 2. ~~패키지 이름을 `astro-inspector`로 확정~~ 완료
 3. ~~ISC LICENSE 추가~~ 완료
-4. `npm publish --dry-run` → 실제 publish
+4. ~~`npm publish --dry-run` → `astro-inspector@0.1.0` 실제 publish~~ 완료
 5. 데모 미디어 촬영 후 README Demo 섹션 해제
 6. Topics 등록, CI 워크플로 추가
