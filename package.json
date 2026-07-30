@@ -27,7 +27,7 @@
     }
   },
   "bin": {
-    "astro-inspector-mcp": "./dist/mcp/cli.js"
+    "astro-inspector-mcp": "dist/mcp/cli.js"
   },
   "files": [
     "dist",
