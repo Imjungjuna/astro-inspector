@@ -7,7 +7,7 @@
 No browser extension. No editor-specific deep links. Copy an MCP-resolvable hash
 or a compact source reference straight from the page.
 
-[![Astro](https://img.shields.io/badge/Astro-7.x-BC52EE?logo=astro&logoColor=white)](https://astro.build)
+[![Astro](https://img.shields.io/badge/Astro-6.2%2B_%7C_7.x-BC52EE?logo=astro&logoColor=white)](https://astro.build)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A522.12-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org)
 [![npm](https://img.shields.io/npm/v/astro-inspector)](https://www.npmjs.com/package/astro-inspector)
 [![MCP](https://img.shields.io/badge/MCP-stdio-000000)](https://modelcontextprotocol.io)
@@ -57,7 +57,7 @@ Agent: → get_astro_element_by_hash
 
 ## Install
 
-Requires **Node.js ≥ 22.12** and **Astro 7**.
+Requires **Node.js ≥ 22.12** and **Astro ≥ 6.2.2, < 8**.
 
 ```bash
 npm install --save-dev astro-inspector
@@ -205,11 +205,11 @@ In dev mode the Astro integration installs a Vite plugin and a small browser cli
 
 ### Picking the right element
 
-The client calls `document.elementsFromPoint()` to get the DOM stack under the pointer, then de-duplicates metadata candidates. It ranks them by the area of the actual rendered box containing the pointer, then DOM depth, then browser stack order — so the most specific element wins.
+The client calls `document.elementsFromPoint()` to get the DOM stack under the pointer. The first metadata-bearing element whose own rendered box contains the point defines the visible layer, so a real DOM overlay blocks elements painted behind it. Within that layer, DOM depth and rendered area keep the most specific eligible element selected.
 
-While the locator is active, `::before` and `::after` are prevented from intercepting hit testing. Elements with `pointer-events: none` — which the browser excludes from the hit stack entirely — are collected once on activation and folded into the same candidate evaluation.
+While the locator is active, `::before` and `::after` are prevented from intercepting hit testing. A stretched pseudo-element whose host box does not contain the pointer is skipped. Elements with `pointer-events: none` — which the browser excludes from the hit stack entirely — are collected once on activation, but only descendants of the visible native layer may refine the selected target.
 
-The result: elements behind real DOM overlays or stretched links, and nested JSX children inside islands, all resolve to the correct source location.
+The result: visible overlays remain selectable, stretched pseudo-elements do not hide the real element beneath them, and nested JSX children inside islands still resolve to the correct source location.
 
 ### Overlay hierarchy
 

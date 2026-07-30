@@ -797,7 +797,7 @@ test("a stretched pseudo-element cannot block its underlying source element", as
   });
 });
 
-test("stack-aware hit resolution selects a smaller annotated element under a real overlay", async ({
+test("a real DOM overlay blocks annotated elements behind it", async ({
   page
 }) => {
   await page.goto("/");
@@ -825,7 +825,7 @@ test("stack-aware hit resolution selects a smaller annotated element under a rea
   await page.keyboard.down("Alt");
   await expect(
     page.locator("[data-astro-ai-locator-overlay] .label")
-  ).toHaveText(/^<span>│ReactIsland\.tsx│\d+:\d+$/u);
+  ).toHaveText(/^<a>│ReactIsland\.tsx│\d+:\d+$/u);
   await page.mouse.click(point.x, point.y);
   await page.keyboard.up("Alt");
 
@@ -840,8 +840,8 @@ test("stack-aware hit resolution selects a smaller annotated element under a rea
     entries: Record<string, { sourceTag: string; domTag: string }>;
   };
   expect(manifest.entries[copied]).toMatchObject({
-    sourceTag: "span",
-    domTag: "span"
+    sourceTag: "a",
+    domTag: "a"
   });
 });
 
@@ -1255,6 +1255,33 @@ test("Copy As defaults to Hash between Trigger and Preferences", async ({
   const contextBox = await contextMode.boundingBox();
   expect(hashBox?.width).toBeCloseTo(triggerBox?.width ?? 0, 0);
   expect(contextBox?.width).toBeCloseTo(triggerBox?.width ?? 0, 0);
+});
+
+test("Copy As changes show copy-specific feedback", async ({ page }) => {
+  await mockSettingsEndpoint(page);
+  await page.goto("/");
+  await page.locator("[data-astro-ai-locator-launcher]").click();
+
+  const copySection = page.locator("[data-copy-as-section]");
+  const toast = page.locator("[data-astro-ai-locator-toast]");
+  const hashMode = copySection.getByRole("radio", { name: "Hash" });
+  const contextMode = copySection.getByRole("radio", { name: "Context" });
+  const tag = copySection.getByRole("checkbox", { name: "Tag" });
+  const moduleName = copySection.getByRole("radio", {
+    name: "Module name"
+  });
+
+  await contextMode.click();
+  await expect(toast).toHaveText("Copy mode changed to Context");
+
+  await tag.click();
+  await expect(toast).toHaveText("Copy context updated");
+
+  await moduleName.click();
+  await expect(toast).toHaveText("Copy context updated");
+
+  await hashMode.click();
+  await expect(toast).toHaveText("Copy mode changed to Hash");
 });
 
 test("Copy As enforces Location and Line dependencies while retaining format", async ({

@@ -78,10 +78,15 @@ function getContainingArea(
 /**
  * Finds the most specific annotated source element at a viewport point.
  *
- * `elementsFromPoint` keeps underlying elements in the candidate stack, which
- * lets the locator see through stretched links and other transparent overlays.
- * Supplemental candidates restore annotated `pointer-events: none` elements
- * that the browser intentionally omits from that native hit stack.
+ * The first native candidate whose own rendered box contains the point defines
+ * the visible layer. This prevents a smaller element behind a real DOM overlay
+ * from winning only because it has less area. A hit caused exclusively by a
+ * stretched pseudo-element has no containing box and is skipped.
+ *
+ * Supplemental candidates restore annotated `pointer-events: none` descendants
+ * that the browser intentionally omits from the native hit stack. They may
+ * refine the visible layer, but unrelated transparent elements cannot reach
+ * through an overlay.
  * An element's own rendered box must contain the point, so a host selected only
  * because its pseudo-element extends elsewhere is not treated as the target.
  */
@@ -90,35 +95,55 @@ export function resolveTargetAtPoint(
   clientY: number,
   supplementalCandidates: readonly Element[] = []
 ): Element | null {
-  const candidates = new Map<Element, HitCandidate>();
-  const addCandidate = (element: Element, stackIndex: number) => {
-    if (candidates.has(element)) {
-      return;
-    }
+  const createCandidate = (
+    element: Element,
+    stackIndex: number
+  ): HitCandidate | null => {
     const area = getContainingArea(element, clientX, clientY);
     if (area === null) {
-      return;
+      return null;
     }
-    candidates.set(element, {
+    return {
       element,
       stackIndex,
       area,
       depth: getElementDepth(element)
-    });
+    };
   };
 
   const hitStack = document.elementsFromPoint(clientX, clientY);
-  hitStack.forEach((hit, stackIndex) => {
+  let visibleCandidate: HitCandidate | null = null;
+  for (const [stackIndex, hit] of hitStack.entries()) {
     const element = hit.matches(SOURCE_SELECTOR)
       ? hit
       : hit.closest(SOURCE_SELECTOR);
     if (!element) {
+      return null;
+    }
+    const candidate = createCandidate(element, stackIndex);
+    if (candidate) {
+      visibleCandidate = candidate;
+      break;
+    }
+  }
+  if (!visibleCandidate) {
+    return null;
+  }
+
+  const candidates = new Map<Element, HitCandidate>([
+    [visibleCandidate.element, visibleCandidate]
+  ]);
+  supplementalCandidates.forEach((element, index) => {
+    if (
+      candidates.has(element) ||
+      !visibleCandidate.element.contains(element)
+    ) {
       return;
     }
-    addCandidate(element, stackIndex);
-  });
-  supplementalCandidates.forEach((element, index) => {
-    addCandidate(element, hitStack.length + index);
+    const candidate = createCandidate(element, hitStack.length + index);
+    if (candidate) {
+      candidates.set(element, candidate);
+    }
   });
 
   return (
@@ -129,6 +154,46 @@ export function resolveTargetAtPoint(
         left.stackIndex - right.stackIndex
     )[0]?.element ?? null
   );
+}
+
+function contextFieldsEqual(
+  left: readonly string[],
+  right: readonly string[]
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((field, index) => field === right[index])
+  );
+}
+
+function getSettingsChangeMessage(
+  previousSettings: LocatorSettings,
+  settings: LocatorSettings
+): string | null {
+  if (settings.colorPreset !== previousSettings.colorPreset) {
+    return `Overlay color changed to ${settings.colorPreset}`;
+  }
+  if (settings.parentLevels !== previousSettings.parentLevels) {
+    return `Parent levels changed to ${settings.parentLevels}`;
+  }
+  if (settings.triggerKey !== previousSettings.triggerKey) {
+    return `Trigger changed to ${settings.triggerKey}`;
+  }
+  if (settings.copyMode !== previousSettings.copyMode) {
+    return `Copy mode changed to ${
+      settings.copyMode === "hash" ? "Hash" : "Context"
+    }`;
+  }
+  if (
+    !contextFieldsEqual(
+      settings.contextFields,
+      previousSettings.contextFields
+    ) ||
+    settings.locationFormat !== previousSettings.locationFormat
+  ) {
+    return "Copy context updated";
+  }
+  return null;
 }
 
 function collectPointerTransparentCandidates(): Element[] {
@@ -246,22 +311,14 @@ function installReadyLocator(
         settingsPanel.setSettings(settings);
         const triggerChanged =
           settings.triggerKey !== previousSettings.triggerKey;
-        const colorChanged =
-          settings.colorPreset !== previousSettings.colorPreset;
-        const parentLevelsChanged =
-          settings.parentLevels !== previousSettings.parentLevels;
         overlay.setColorPreset(settings.colorPreset);
         overlay.setParentLevels(settings.parentLevels);
-        if (colorChanged) {
-          overlay.toast(
-            `Overlay color changed to ${settings.colorPreset}`
-          );
-        } else if (parentLevelsChanged) {
-          overlay.toast(
-            `Parent levels changed to ${settings.parentLevels}`
-          );
-        } else {
-          overlay.toast(`Trigger changed to ${settings.triggerKey}`);
+        const settingsChangeMessage = getSettingsChangeMessage(
+          previousSettings,
+          settings
+        );
+        if (settingsChangeMessage) {
+          overlay.toast(settingsChangeMessage);
         }
         if (triggerChanged) {
           setActive(false);
