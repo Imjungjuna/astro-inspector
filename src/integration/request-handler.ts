@@ -13,6 +13,7 @@ type Next = (error?: unknown) => void;
 
 interface RegistrationHandlerOptions {
   root: string;
+  workspaceRoot: string;
   sessionToken: string;
   store: ManifestStore;
 }
@@ -118,6 +119,14 @@ export function createRegistrationHandler(
         input.column,
         input.sourceTag
       );
+      const canonicalWorkspaceRoot = await realpath(options.workspaceRoot);
+      if (!isInside(canonicalWorkspaceRoot, canonicalFile)) {
+        throw new Error("Source is outside the detected workspace root");
+      }
+      const workspaceFile = `/${toProjectRelativeFile(
+        canonicalWorkspaceRoot,
+        canonicalFile
+      )}`;
       const entry = {
         file: toProjectRelativeFile(canonicalRoot, canonicalFile),
         line: input.line,
@@ -128,7 +137,7 @@ export function createRegistrationHandler(
       const hash = createElementHash(entry);
       await options.store.upsert(hash, entry);
       response.statusCode = 200;
-      response.end(JSON.stringify({ hash, entry }));
+      response.end(JSON.stringify({ hash, entry, workspaceFile }));
     } catch (error) {
       response.statusCode = 400;
       response.end(

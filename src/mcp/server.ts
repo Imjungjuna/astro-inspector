@@ -16,7 +16,7 @@ function toolError(message: string): CallToolResult {
 
 export function createMcpServer(options: McpServerOptions): McpServer {
   const server = new McpServer({
-    name: "astro-ai-locator",
+    name: "astro-inspector",
     version: "0.1.0"
   });
 
@@ -30,7 +30,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
         hash: z
           .string()
           .regex(/^astro_hash_[a-f0-9]{24}$/u)
-          .describe("The hash copied by Astro AI Locator")
+          .describe("The hash copied by Astro Inspector")
       }
     },
     async ({ hash }): Promise<CallToolResult> => {

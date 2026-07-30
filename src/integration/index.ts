@@ -7,15 +7,15 @@ import {
 } from "../shared/contracts.js";
 import { createLocatorVitePlugin } from "./vite-plugin.js";
 
-export interface AstroAiLocatorOptions {
+export interface AstroInspectorOptions {
   showAllBoundaries?: boolean;
 }
 
-export function astroAiLocator(
-  options: AstroAiLocatorOptions = {}
+export function astroInspector(
+  options: AstroInspectorOptions = {}
 ): AstroIntegration {
   return {
-    name: "astro-ai-locator",
+    name: "astro-inspector",
     hooks: {
       "astro:config:setup"({
         command,
@@ -50,7 +50,7 @@ export function astroAiLocator(
         injectScript(
           "page",
           [
-            'import { installLocator } from "astro-ai-locator/client";',
+            'import { installLocator } from "astro-inspector/client";',
             `installLocator(${JSON.stringify(clientOptions)});`
           ].join("\n")
         );
@@ -58,3 +58,9 @@ export function astroAiLocator(
     }
   };
 }
+
+/** @deprecated Use `astroInspector` instead. */
+export const astroAiLocator = astroInspector;
+
+/** @deprecated Use `AstroInspectorOptions` instead. */
+export type AstroAiLocatorOptions = AstroInspectorOptions;

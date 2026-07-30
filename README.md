@@ -1,10 +1,11 @@
 <div align="center">
 
-# astro-ai-locator
+# astro-inspector
 
 **Click a UI element in your Astro dev server. Your AI agent gets the exact source file, line, and column.**
 
-No browser extension. No editor-specific deep links. Just a hash on your clipboard and an MCP server that resolves it.
+No browser extension. No editor-specific deep links. Copy an MCP-resolvable hash
+or a compact source reference straight from the page.
 
 [![Astro](https://img.shields.io/badge/Astro-7.x-BC52EE?logo=astro&logoColor=white)](https://astro.build)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A522.12-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org)
@@ -41,7 +42,7 @@ Recommended captures:
 
 Telling an AI agent *"fix the padding on the card in the pricing section"* makes it guess. It greps, it opens the wrong file, it edits a component that renders somewhere else entirely.
 
-`astro-ai-locator` removes the guessing. You point at the pixel. The agent gets the line.
+`astro-inspector` removes the guessing. You point at the pixel. The agent gets the line.
 
 ```
 You: [pastes astro_hash_0123456789abcdef01234567] make this card's padding tighter
@@ -58,7 +59,7 @@ Agent: → get_astro_element_by_hash
 Requires **Node.js ≥ 22.12** and **Astro 7**.
 
 ```bash
-npm install --save-dev astro-ai-locator
+npm install --save-dev astro-inspector
 ```
 
 Add the integration:
@@ -66,10 +67,10 @@ Add the integration:
 ```js
 // astro.config.mjs
 import { defineConfig } from "astro/config";
-import { astroAiLocator } from "astro-ai-locator";
+import { astroInspector } from "astro-inspector";
 
 export default defineConfig({
-  integrations: [astroAiLocator()]
+  integrations: [astroInspector()]
 });
 ```
 
@@ -89,10 +90,10 @@ Run `astro dev`, then:
 | Step | Action |
 | --- | --- |
 | 1 | Hold the trigger key — `Alt` (`Option` on macOS) by default — and move the pointer over the page. |
-| 2 | Read the overlay: faint grey outlines every trackable element, a muted purple outline marks the nearest metadata-bearing ancestor, and a solid purple overlay marks the current target. |
+| 2 | Read the overlay: faint grey outlines every trackable element, progressively softer themed outlines mark the selected metadata-bearing ancestors, and the strongest themed overlay marks the current target. |
 | 3 | Click the element. |
-| 4 | A hash like `astro_hash_0123456789abcdef01234567` is copied to your clipboard. |
-| 5 | Paste it into any MCP-connected CLI or ACP chat and ask for the change. |
+| 4 | By default, a hash like `astro_hash_0123456789abcdef01234567` is copied to your clipboard. |
+| 5 | Paste the hash into any MCP-connected CLI or ACP chat and ask for the change. Or choose `Context` under `Copy As` when a readable source reference is more useful. |
 
 ### The hover label
 
@@ -102,20 +103,49 @@ The current target shows a label in the form:
 <SourceTag→DomTag> │ FileName.astro │ line:column
 ```
 
-The filename keeps its extension, and the arrow is omitted when the source tag and the rendered DOM tag are identical. The full project-relative path is preserved in the DOM metadata, the manifest, and the MCP response.
+The filename keeps its extension, and the arrow is omitted when the source tag and the rendered DOM tag are identical. The full project-relative path is preserved in the DOM metadata, the manifest, and the MCP response. Labels prefer to sit above the target. They use the space below when the label does not fit above but does fit below; if neither side fits, they choose the side with more available space. The result is then clamped to an 8px viewport inset on every edge. The 640px maximum width and ellipsis keep long source names readable without overflowing the screen.
 
-### Changing the trigger key
+### Copy feedback
+
+After a successful click, a bottom-center status toast confirms whether a hash or Context payload was copied. It uses a short pop animation, stays visible long enough to read, and restarts cleanly for rapid consecutive clicks. The toast respects `prefers-reduced-motion` by fading without the scale or overshoot motion.
+
+### Changing locator preferences
 
 A translucent grey fox button sits in the bottom-left corner of every dev page. Click it to open a blurred, high-density settings popover.
 
 - Pick `Control`, `Option / Alt`, or `Command / Meta` from a 28px-row list.
-- The active key is marked with a small purple keycap; the hovered row lightens.
+- The active key is marked with a themed keycap; the hovered row stays neutral
+  grey.
+- Pick `Neutral`, `Violet`, `Orange`, or `Sky` under `Overlay Color`. Violet is
+  the default.
+- The selected color updates the current and parent outlines, current fill,
+  hover label, active keycap, and selected color ring.
+- Choose `0`, `1`, `2`, or `3` under `Parent Levels`. The default is `1`.
+  `0` hides parent outlines; higher values walk outward through visually
+  distinct ancestors carrying both source-file and source-location metadata.
+- `Copy As` defaults to `Hash`, which is the precise MCP lookup workflow.
+  `Context` can combine Tag and Location, with optional Line when Location is
+  selected. Output order is always Tag → Location regardless of click order:
+
+  ```text
+  <Link→a> | /apps/astro/src/components/HospitalListCard.tsx:298:13
+  ```
+
+- Location can be shown as a Vite workspace-root-relative `Path` (with a
+  leading `/`) or an extension-preserving `Module name`. Turning Location off
+  also turns Line off; the last Path/Module name preference is remembered when
+  Location is enabled again.
+- The whole Context row opens and closes its options. Selecting Context from
+  Hash opens it automatically; switching back to Hash does not force it
+  closed. The disclosure starts closed on every page load.
 - Pressing or releasing the trigger key never opens or closes the popover.
 - Combinations that include another modifier are not intercepted by the locator.
 - Drag the fox button to reposition it — the popover follows and the position persists in the browser.
 - Close the popover with an outside click or `Escape`. It always starts closed on reload.
 
-The `Overlay Color` chip under `Preferences` is a preview for a future theming feature and is not clickable yet.
+Trigger, Copy As, color, and parent-level choices are stored globally and
+apply immediately on the current page. Other open locator pages pick them up
+on refresh.
 
 ### Options
 
@@ -124,7 +154,7 @@ The `Overlay Color` chip under `Preferences` is a preview for a future theming f
 | `showAllBoundaries` | `boolean` | `true` | Outline every trackable element while the locator is active. Set to `false` to show only the current target overlay. |
 
 ```js
-integrations: [astroAiLocator({ showAllBoundaries: false })]
+integrations: [astroInspector({ showAllBoundaries: false })]
 ```
 
 ---
@@ -138,7 +168,7 @@ Register a project-local stdio command with your MCP host. `--project-root` must
   "command": "npx",
   "args": [
     "--no-install",
-    "astro-ai-locator-mcp",
+    "astro-inspector-mcp",
     "--project-root",
     "/absolute/path/to/your/astro-project"
   ]
@@ -148,7 +178,7 @@ Register a project-local stdio command with your MCP host. `--project-root` must
 If your host launches commands from outside the Astro project, point `command` directly at the binary instead:
 
 ```
-/absolute/path/to/your/astro-project/node_modules/.bin/astro-ai-locator-mcp
+/absolute/path/to/your/astro-project/node_modules/.bin/astro-inspector-mcp
 ```
 
 ### The tool
@@ -202,13 +232,13 @@ Repeated renders of the same `.astro` tag share one hash across all DOM instance
 .astro-ai-locator/manifest.json
 ```
 
-**User-global trigger key**, shared across every repository and worktree:
+**User-global locator settings**, shared across every repository and worktree:
 
 ```text
 ~/.astro-ai-locator/settings.json
 ```
 
-The browser never touches this file directly. On page load the client makes one authenticated call to a local Vite endpoint, and the Vite process reads or atomically writes the file. Changes apply immediately on the current page; other open pages pick them up on refresh. A missing or corrupted file falls back to `Option/Alt`, and the file is not created until you actually change a setting.
+The browser never touches this file directly. On page load the client makes one authenticated call to a local Vite endpoint, and the Vite process reads or atomically writes the file. Changes apply immediately on the current page; other open pages pick them up on refresh. Schema-v1 through schema-v4 settings are migrated in memory to schema v5; old Module settings become workspace Path settings. A missing or corrupted file falls back to `Option/Alt`, `Violet`, one parent level, and Hash copy with Path + Line ready under Context. The file is not created until you actually change a setting.
 
 ---
 
@@ -225,7 +255,8 @@ The browser never touches this file directly. On page load the client makes one 
 Additional constraints:
 
 - **Dev mode only.** Production builds receive no client, no endpoint, and no source metadata.
-- If clipboard permission is denied, the client falls back to a browser prompt for manual copy.
+- If clipboard permission is denied, the client falls back to a browser prompt
+  containing the exact Hash or Context payload for manual copy.
 - Key combinations the browser never delivers to the page — OS-reserved `Command/Meta` shortcuts, for example — cannot be intercepted.
 - Assumes one Astro dev server per project directory.
 
@@ -233,7 +264,7 @@ Additional constraints:
 
 ## Security
 
-**Dev endpoints** require a token that is regenerated for every process. The element-registration endpoint caps the request body and the source file size, and accepts only real `.astro` / `.tsx` / `.jsx` files inside the project root at valid line and column positions. The settings endpoint reads and writes exactly three allowed modifiers.
+**Dev endpoints** require a token that is regenerated for every process. The element-registration endpoint caps the request body and the source file size, and accepts only real `.astro` / `.tsx` / `.jsx` files inside the project root at valid line and column positions. The workspace-relative path used by Context copy is derived from Vite's detected workspace root only after that validation; it is returned to the authenticated browser for the current click and is not stored in the DOM, manifest, MCP result, or settings. The settings endpoint validates allowlisted trigger keys, color presets, parent levels, copy modes, context fields, Location/Line dependencies, and Location formats before an atomic write.
 
 **The MCP server** normalizes both manifest and source paths with `realpath`, blocking path traversal and symlink escapes. On stdio, `stdout` carries the MCP protocol only — all diagnostics go to `stderr`.
 
@@ -243,7 +274,6 @@ Additional constraints:
 
 - A hash is derived from file path, line, column, and DOM tag. Moving the tag or changing what it renders produces a new hash.
 - Astro major versions that change the compiler AST need separate compatibility verification.
-- MCP SDK 1.29 carries a moderate advisory on a `serve-static` path affecting Windows, via its HTTP helper dependency. This package does not expose that HTTP server — it uses the local stdio transport only.
 - This release provides source *lookup* only. File-write permission and the actual code edits belong to the connected AI host.
 
 ---

@@ -10,7 +10,7 @@ function readProjectRoot(arguments_: string[]): string {
   const value = index >= 0 ? arguments_[index + 1] : undefined;
   if (!value || value.startsWith("--")) {
     throw new Error(
-      "Usage: astro-ai-locator-mcp --project-root <absolute-project-path>"
+      "Usage: astro-inspector-mcp --project-root <absolute-project-path>"
     );
   }
   if (!path.isAbsolute(value)) {
@@ -27,7 +27,7 @@ async function main(): Promise<void> {
   }
   const server = createMcpServer({ projectRoot });
   await server.connect(new StdioServerTransport());
-  console.error(`astro-ai-locator MCP ready for ${projectRoot}`);
+  console.error(`astro-inspector MCP ready for ${projectRoot}`);
 }
 
 main().catch((error: unknown) => {

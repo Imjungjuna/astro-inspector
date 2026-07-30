@@ -1,12 +1,27 @@
 import {
+  COLOR_PRESETS,
+  PARENT_LEVELS,
   TRIGGER_KEYS,
+  type ColorPreset,
+  type ContextField,
+  type CopyMode,
+  type LocationFormat,
+  type LocatorSettings,
+  type ParentLevels,
   type TriggerKey
 } from "../shared/contracts.js";
+import {
+  LOCATOR_COLOR_THEMES,
+  applyColorPreset
+} from "./color-presets.js";
 import { FOX_MARK_PATH } from "./fox-mark.js";
 
 const LAUNCHER_POSITION_KEY =
   "astro-ai-locator:launcher-position:v1";
 const POPOVER_ID = "astro-ai-locator-settings-popover";
+const CONTEXT_OPTIONS_ID = "astro-ai-locator-context-options";
+const LOCATION_FORMAT_OPTIONS_ID =
+  "astro-ai-locator-location-format-options";
 const VIEWPORT_GAP = 12;
 const DEFAULT_EDGE_GAP = 16;
 const LAUNCHER_SIZE = 46;
@@ -19,12 +34,14 @@ interface LauncherPosition {
 }
 
 interface SettingsPanelOptions {
-  triggerKey: TriggerKey;
-  onTriggerKeyChange(triggerKey: TriggerKey): Promise<boolean>;
+  settings: LocatorSettings;
+  onSettingsChange(
+    settings: LocatorSettings
+  ): Promise<LocatorSettings | null>;
 }
 
 export interface LocatorSettingsPanel {
-  setTriggerKey(triggerKey: TriggerKey): void;
+  setSettings(settings: LocatorSettings): void;
   destroy(): void;
 }
 
@@ -63,6 +80,14 @@ function readPosition(): LauncherPosition | null {
 export function createSettingsPanel(
   options: SettingsPanelOptions
 ): LocatorSettingsPanel {
+  const colorButtonsMarkup = COLOR_PRESETS.map((preset) => {
+    const label = `${preset[0]?.toUpperCase()}${preset.slice(1)}`;
+    return `<button class="chip" type="button" data-ui-color-chip data-color-preset="${preset}" aria-label="${label}" aria-pressed="false" style="--chip-color:${LOCATOR_COLOR_THEMES[preset].swatch}"></button>`;
+  }).join("");
+  const parentLevelButtonsMarkup = PARENT_LEVELS.map(
+    (level) =>
+      `<button class="level-button" type="button" data-parent-level="${level}" aria-label="${level}" aria-pressed="false">${level}</button>`
+  ).join("");
   const host = document.createElement("div");
   host.dataset.astroAiLocatorSettings = "";
   host.dataset.astroAiLocatorUi = "";
@@ -171,6 +196,7 @@ export function createSettingsPanel(
         visibility: visible;
       }
       .trigger-section,
+      .copy-section,
       .preferences-section {
         padding: 8px;
       }
@@ -230,13 +256,101 @@ export function createSettingsPanel(
         border-radius: 5px;
         background: rgba(255, 255, 255, 0.1);
         color: #ffffff;
-        font: 600 16px/1 ui-monospace, SFMono-Regular, Menlo, Monaco,
+        font: 400 16px/1 ui-monospace, SFMono-Regular, Menlo, Monaco,
           Consolas, monospace;
       }
       .choice[aria-pressed="true"] .keycap {
-        border-color: #7c3aed;
-        background: #7c3aed;
+        border-color: var(--locator-solid);
+        background: var(--locator-solid);
         color: #ffffff;
+      }
+      .copy-mode-row {
+        width: 100%;
+      }
+      .copy-mode-choice[aria-checked="true"] .keycap {
+        border-color: var(--locator-solid);
+        background: var(--locator-solid);
+        color: #ffffff;
+      }
+      .context-mode-choice {
+        grid-template-columns: 24px minmax(0, 1fr) 18px;
+      }
+      .context-cue {
+        display: block;
+        color: rgba(255, 255, 255, 0.72);
+        font: 400 18px/1 ui-sans-serif, system-ui, sans-serif;
+        pointer-events: none;
+        text-align: center;
+        transform: rotate(0deg);
+        transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+      .context-mode-choice[aria-expanded="true"] .context-cue {
+        transform: rotate(90deg);
+      }
+      .option-row:focus-visible {
+        outline: none;
+        box-shadow: inset 0 0 0 2px #71717a;
+      }
+      .collapsible {
+        display: grid;
+        grid-template-rows: 0fr;
+        opacity: 0;
+        transition:
+          grid-template-rows 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+          opacity 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+      .collapsible[data-expanded] {
+        grid-template-rows: 1fr;
+        opacity: 1;
+      }
+      .collapsible-inner {
+        min-height: 0;
+        overflow: hidden;
+      }
+      .context-options-surface {
+        padding: 4px 8px 6px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .option-row {
+        display: grid;
+        width: calc(100% - 16px);
+        height: 28px;
+        margin-left: 16px;
+        padding: 0 4px;
+        align-items: center;
+        grid-template-columns: 18px minmax(0, 1fr);
+        gap: 5px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: #fafafa;
+        cursor: pointer;
+        font: 400 13px/18px ui-sans-serif, system-ui, -apple-system,
+          BlinkMacSystemFont, "Segoe UI", sans-serif;
+        text-align: left;
+      }
+      .option-row:hover {
+        background: rgba(255, 255, 255, 0.14);
+      }
+      .option-row:disabled {
+        color: rgba(255, 255, 255, 0.38);
+        cursor: default;
+      }
+      .option-row:disabled:hover {
+        background: transparent;
+      }
+      .option-check {
+        display: block;
+        width: 18px;
+        color: #ffffff;
+        font-size: 15px;
+        line-height: 1;
+        text-align: center;
+      }
+      .location-format-options .option-row {
+        width: calc(100% - 34px);
+        margin-left: 34px;
       }
       .choice:disabled {
         cursor: wait;
@@ -268,13 +382,66 @@ export function createSettingsPanel(
         display: block;
         width: 18px;
         height: 18px;
+        padding: 0;
+        appearance: none;
         border: 2px solid rgba(63, 63, 70, 0.8);
         border-radius: 999px;
+        background: var(--chip-color);
         box-shadow: 0 0 0 1px #52525b;
+        cursor: pointer;
+      }
+      .chip[aria-pressed="true"] {
+        box-shadow:
+          0 0 0 2px rgba(63, 63, 70, 0.8),
+          0 0 0 4px var(--locator-solid);
+      }
+      .chip:focus-visible {
+        outline: 2px solid #ffffff;
+        outline-offset: 2px;
+      }
+      .chip:disabled {
+        cursor: wait;
+        opacity: 0.62;
+      }
+      .level-group {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+      }
+      .level-button {
+        display: grid;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        place-items: center;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.1);
+        color: #ffffff;
+        cursor: pointer;
+        font: 400 12px/1 ui-monospace, SFMono-Regular, Menlo, Monaco,
+          Consolas, monospace;
+      }
+      .level-button:hover {
+        background: rgba(255, 255, 255, 0.14);
+      }
+      .level-button[aria-pressed="true"] {
+        border-color: var(--locator-solid);
+        background: var(--locator-solid);
+      }
+      .level-button:focus-visible {
+        outline: 2px solid #ffffff;
+        outline-offset: 2px;
+      }
+      .level-button:disabled {
+        cursor: wait;
+        opacity: 0.62;
       }
       @media (prefers-reduced-motion: reduce) {
         .launcher,
         .choice,
+        .collapsible,
+        .context-cue,
         .popover {
           transition: none;
         }
@@ -291,7 +458,7 @@ export function createSettingsPanel(
       data-astro-ai-locator-popover
       data-placement="above"
       role="dialog"
-      aria-label="Astro AI Locator settings"
+      aria-label="Astro Inspector settings"
       aria-hidden="true"
     >
       <div class="trigger-section">
@@ -312,15 +479,129 @@ export function createSettingsPanel(
         </div>
       </div>
       <div class="divider" aria-hidden="true"></div>
+      <div class="copy-section" data-copy-as-section>
+        <p class="section-heading">Copy As</p>
+        <div role="radiogroup" aria-label="Copy mode">
+          <div class="copy-mode-row">
+            <button
+              class="choice copy-mode-choice"
+              type="button"
+              role="radio"
+              aria-checked="false"
+              data-copy-mode="hash"
+            >
+              <span class="keycap" data-copy-mode-keycap aria-hidden="true">#</span>
+              <span>Hash</span>
+            </button>
+          </div>
+          <div class="copy-mode-row">
+            <button
+              class="choice copy-mode-choice context-mode-choice"
+              type="button"
+              role="radio"
+              aria-checked="false"
+              aria-expanded="false"
+              aria-controls="${CONTEXT_OPTIONS_ID}"
+              data-copy-mode="context"
+            >
+              <span class="keycap" data-copy-mode-keycap aria-hidden="true">@</span>
+              <span>Context</span>
+              <span class="context-cue" data-context-cue aria-hidden="true">›</span>
+            </button>
+          </div>
+        </div>
+        <div
+          class="collapsible context-options"
+          id="${CONTEXT_OPTIONS_ID}"
+          data-context-options
+          aria-hidden="true"
+        >
+          <div class="collapsible-inner">
+            <div class="context-options-surface">
+              <button
+                class="option-row"
+                type="button"
+                role="checkbox"
+                aria-checked="false"
+                data-context-field="tag"
+                tabindex="-1"
+              >
+                <span class="option-check" aria-hidden="true"></span>
+                <span>Tag</span>
+              </button>
+              <button
+                class="option-row"
+                type="button"
+                role="checkbox"
+                aria-checked="false"
+                aria-controls="${LOCATION_FORMAT_OPTIONS_ID}"
+                data-context-field="location"
+                tabindex="-1"
+              >
+                <span class="option-check" aria-hidden="true"></span>
+                <span>Location</span>
+              </button>
+              <div
+                class="collapsible location-format-options"
+                id="${LOCATION_FORMAT_OPTIONS_ID}"
+                data-location-format-options
+                role="radiogroup"
+                aria-label="Location format"
+                aria-hidden="true"
+              >
+                <div class="collapsible-inner">
+                  <button
+                    class="option-row"
+                    type="button"
+                    role="radio"
+                    aria-checked="false"
+                    data-location-format="path"
+                    tabindex="-1"
+                  >
+                    <span class="option-check" aria-hidden="true"></span>
+                    <span>Path</span>
+                  </button>
+                  <button
+                    class="option-row"
+                    type="button"
+                    role="radio"
+                    aria-checked="false"
+                    data-location-format="moduleName"
+                    tabindex="-1"
+                  >
+                    <span class="option-check" aria-hidden="true"></span>
+                    <span>Module name</span>
+                  </button>
+                </div>
+              </div>
+              <button
+                class="option-row"
+                type="button"
+                role="checkbox"
+                aria-checked="false"
+                data-context-field="line"
+                tabindex="-1"
+              >
+                <span class="option-check" aria-hidden="true"></span>
+                <span>Line</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="divider" aria-hidden="true"></div>
       <div class="preferences-section">
         <p class="section-heading">Preferences</p>
         <div class="preference-row">
           <span>Overlay Color</span>
-          <span class="chips" aria-hidden="true">
-            <span class="chip" data-ui-color-chip style="background:#111111"></span>
-            <span class="chip" data-ui-color-chip style="background:#7c3aed"></span>
-            <span class="chip" data-ui-color-chip style="background:#f97316"></span>
-            <span class="chip" data-ui-color-chip style="background:#0ea5e9"></span>
+          <span class="chips" role="group" aria-label="Overlay color">
+            ${colorButtonsMarkup}
+          </span>
+        </div>
+        <div class="preference-row">
+          <span>Parent Levels</span>
+          <span class="level-group" role="group" aria-label="Parent levels">
+            ${parentLevelButtonsMarkup}
           </span>
         </div>
       </div>
@@ -331,7 +612,7 @@ export function createSettingsPanel(
       type="button"
       aria-expanded="false"
       aria-controls="${POPOVER_ID}"
-      aria-label="Open Astro AI Locator settings"
+      aria-label="Open Astro Inspector settings"
     >
       <svg
         class="fox-mark"
@@ -344,6 +625,7 @@ export function createSettingsPanel(
       </svg>
     </button>
   `;
+  applyColorPreset(host, options.settings.colorPreset);
   document.documentElement.append(host);
 
   const launcher = shadow.querySelector<HTMLButtonElement>(
@@ -355,14 +637,46 @@ export function createSettingsPanel(
   const choiceButtons = Array.from(
     shadow.querySelectorAll<HTMLButtonElement>("[data-trigger-key]")
   );
-  if (!launcher || !popover) {
+  const colorButtons = Array.from(
+    shadow.querySelectorAll<HTMLButtonElement>("[data-color-preset]")
+  );
+  const parentLevelButtons = Array.from(
+    shadow.querySelectorAll<HTMLButtonElement>("[data-parent-level]")
+  );
+  const copyModeButtons = Array.from(
+    shadow.querySelectorAll<HTMLButtonElement>("[data-copy-mode]")
+  );
+  const contextFieldButtons = Array.from(
+    shadow.querySelectorAll<HTMLButtonElement>("[data-context-field]")
+  );
+  const locationFormatButtons = Array.from(
+    shadow.querySelectorAll<HTMLButtonElement>("[data-location-format]")
+  );
+  const contextModeButton = shadow.querySelector<HTMLButtonElement>(
+    '[data-copy-mode="context"]'
+  );
+  const contextOptions = shadow.querySelector<HTMLElement>(
+    "[data-context-options]"
+  );
+  const locationFormatOptions = shadow.querySelector<HTMLElement>(
+    "[data-location-format-options]"
+  );
+  if (
+    !launcher ||
+    !popover ||
+    !contextModeButton ||
+    !contextOptions ||
+    !locationFormatOptions
+  ) {
     host.remove();
     throw new Error("Locator settings UI could not initialize");
   }
 
-  let currentTriggerKey = options.triggerKey;
+  let currentSettings = options.settings;
   let position = readPosition();
   let open = false;
+  let contextExpanded = false;
+  let settingsWritePending = false;
   let pointerActive = false;
   let dragging = false;
   let suppressNextClick = false;
@@ -427,8 +741,8 @@ export function createSettingsPanel(
     launcher.setAttribute(
       "aria-label",
       open
-        ? "Close Astro AI Locator settings"
-        : "Open Astro AI Locator settings"
+        ? "Close Astro Inspector settings"
+        : "Open Astro Inspector settings"
     );
     popover.setAttribute("aria-hidden", String(!open));
     popover.toggleAttribute("data-open", open);
@@ -439,40 +753,286 @@ export function createSettingsPanel(
     }
   };
 
-  const updateSelectedKey = () => {
+  const settingsButtons = [
+    ...choiceButtons,
+    ...copyModeButtons,
+    ...contextFieldButtons,
+    ...locationFormatButtons,
+    ...colorButtons,
+    ...parentLevelButtons
+  ];
+
+  const updateButtonAvailability = () => {
+    const locationSelected =
+      currentSettings.contextFields.includes("location");
+    settingsButtons.forEach((button) => {
+      button.disabled = settingsWritePending;
+    });
+    const lineButton = contextFieldButtons.find(
+      (button) => button.dataset.contextField === "line"
+    );
+    if (lineButton) {
+      lineButton.disabled = settingsWritePending || !locationSelected;
+    }
+  };
+
+  const updateDisclosure = () => {
+    const locationSelected =
+      currentSettings.contextFields.includes("location");
+    const formatExpanded = contextExpanded && locationSelected;
+    contextModeButton.setAttribute(
+      "aria-expanded",
+      String(contextExpanded)
+    );
+    contextOptions.toggleAttribute("data-expanded", contextExpanded);
+    contextOptions.setAttribute("aria-hidden", String(!contextExpanded));
+    contextOptions.inert = !contextExpanded;
+    contextFieldButtons.forEach((button) => {
+      button.tabIndex = contextExpanded ? 0 : -1;
+    });
+
+    locationFormatOptions.toggleAttribute(
+      "data-expanded",
+      formatExpanded
+    );
+    locationFormatOptions.setAttribute(
+      "aria-hidden",
+      String(!formatExpanded)
+    );
+    locationFormatOptions.inert = !formatExpanded;
+    locationFormatButtons.forEach((button) => {
+      button.tabIndex = formatExpanded ? 0 : -1;
+    });
+    window.requestAnimationFrame(updatePopoverPlacement);
+  };
+
+  const updateSelectedSettings = () => {
     choiceButtons.forEach((button) => {
       button.setAttribute(
         "aria-pressed",
-        String(button.dataset.triggerKey === currentTriggerKey)
+        String(button.dataset.triggerKey === currentSettings.triggerKey)
       );
     });
+    colorButtons.forEach((button) => {
+      button.setAttribute(
+        "aria-pressed",
+        String(button.dataset.colorPreset === currentSettings.colorPreset)
+      );
+    });
+    parentLevelButtons.forEach((button) => {
+      button.setAttribute(
+        "aria-pressed",
+        String(
+          Number(button.dataset.parentLevel) ===
+            currentSettings.parentLevels
+        )
+      );
+    });
+    copyModeButtons.forEach((button) => {
+      button.setAttribute(
+        "aria-checked",
+        String(button.dataset.copyMode === currentSettings.copyMode)
+      );
+    });
+    contextFieldButtons.forEach((button) => {
+      const selected = currentSettings.contextFields.includes(
+        button.dataset.contextField as ContextField
+      );
+      button.setAttribute("aria-checked", String(selected));
+      const check = button.querySelector<HTMLElement>(".option-check");
+      if (check) {
+        check.textContent = selected ? "✓" : "";
+      }
+    });
+    locationFormatButtons.forEach((button) => {
+      const selected =
+        button.dataset.locationFormat === currentSettings.locationFormat;
+      button.setAttribute("aria-checked", String(selected));
+      const check = button.querySelector<HTMLElement>(".option-check");
+      if (check) {
+        check.textContent = selected ? "✓" : "";
+      }
+    });
+    applyColorPreset(host, currentSettings.colorPreset);
+    updateButtonAvailability();
+    updateDisclosure();
   };
+
+  const requestSettingsChange = (nextSettings: LocatorSettings) => {
+    if (settingsWritePending) {
+      return;
+    }
+    const previousSettings = currentSettings;
+    currentSettings = {
+      ...nextSettings,
+      contextFields: [...nextSettings.contextFields]
+    };
+    settingsWritePending = true;
+    updateSelectedSettings();
+    void options
+      .onSettingsChange(nextSettings)
+      .then((acceptedSettings) => {
+        if (acceptedSettings) {
+          currentSettings = {
+            ...acceptedSettings,
+            contextFields: [...acceptedSettings.contextFields]
+          };
+        } else {
+          currentSettings = previousSettings;
+        }
+      })
+      .catch(() => {
+        currentSettings = previousSettings;
+      })
+      .finally(() => {
+        settingsWritePending = false;
+        updateSelectedSettings();
+      });
+  };
+
+  const orderedContextFields = (
+    fields: ReadonlySet<ContextField>
+  ): ContextField[] =>
+    (["tag", "location", "line"] as const).filter((field) =>
+      fields.has(field)
+    );
+
+  copyModeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const copyMode = button.dataset.copyMode as CopyMode;
+      if (copyMode === "context") {
+        if (currentSettings.copyMode !== "context") {
+          contextExpanded = true;
+          if (currentSettings.contextFields.length > 0) {
+            requestSettingsChange({
+              ...currentSettings,
+              copyMode: "context"
+            });
+          } else {
+            updateDisclosure();
+          }
+          return;
+        }
+        contextExpanded = !contextExpanded;
+        updateDisclosure();
+        return;
+      }
+      if (copyMode === "hash") {
+        if (currentSettings.copyMode !== "hash") {
+          requestSettingsChange({
+            ...currentSettings,
+            copyMode: "hash"
+          });
+        }
+        return;
+      }
+    });
+  });
+
+  contextFieldButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const field = button.dataset.contextField as ContextField;
+      const fields = new Set(currentSettings.contextFields);
+      if (field === "location") {
+        if (fields.has("location")) {
+          fields.delete("location");
+          fields.delete("line");
+        } else {
+          fields.add("location");
+        }
+      } else if (field === "line") {
+        if (!fields.has("location")) {
+          return;
+        }
+        if (fields.has("line")) {
+          fields.delete("line");
+        } else {
+          fields.add("line");
+        }
+      } else if (field === "tag") {
+        if (fields.has("tag")) {
+          fields.delete("tag");
+        } else {
+          fields.add("tag");
+        }
+      } else {
+        return;
+      }
+      const contextFields = orderedContextFields(fields);
+      requestSettingsChange({
+        ...currentSettings,
+        copyMode: contextFields.length > 0 ? "context" : "hash",
+        contextFields
+      });
+    });
+  });
+
+  locationFormatButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const locationFormat = button.dataset
+        .locationFormat as LocationFormat;
+      if (
+        !currentSettings.contextFields.includes("location") ||
+        (locationFormat !== "path" &&
+          locationFormat !== "moduleName") ||
+        (locationFormat === currentSettings.locationFormat &&
+          currentSettings.copyMode === "context")
+      ) {
+        return;
+      }
+      requestSettingsChange({
+        ...currentSettings,
+        copyMode: "context",
+        locationFormat
+      });
+    });
+  });
 
   choiceButtons.forEach((button) => {
     button.addEventListener("click", () => {
       const triggerKey = button.dataset.triggerKey;
       if (
         !TRIGGER_KEYS.includes(triggerKey as TriggerKey) ||
-        triggerKey === currentTriggerKey
+        triggerKey === currentSettings.triggerKey
       ) {
         return;
       }
-      choiceButtons.forEach((choice) => {
-        choice.disabled = true;
+      requestSettingsChange({
+        ...currentSettings,
+        triggerKey: triggerKey as TriggerKey
       });
-      void options
-        .onTriggerKeyChange(triggerKey as TriggerKey)
-        .then((accepted) => {
-          if (accepted) {
-            currentTriggerKey = triggerKey as TriggerKey;
-            updateSelectedKey();
-          }
-        })
-        .finally(() => {
-          choiceButtons.forEach((choice) => {
-            choice.disabled = false;
-          });
-        });
+    });
+  });
+
+  colorButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const colorPreset = button.dataset.colorPreset;
+      if (
+        !COLOR_PRESETS.includes(colorPreset as ColorPreset) ||
+        colorPreset === currentSettings.colorPreset
+      ) {
+        return;
+      }
+      requestSettingsChange({
+        ...currentSettings,
+        colorPreset: colorPreset as ColorPreset
+      });
+    });
+  });
+
+  parentLevelButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const parentLevels = Number(button.dataset.parentLevel);
+      if (
+        !PARENT_LEVELS.includes(parentLevels as ParentLevels) ||
+        parentLevels === currentSettings.parentLevels
+      ) {
+        return;
+      }
+      requestSettingsChange({
+        ...currentSettings,
+        parentLevels: parentLevels as ParentLevels
+      });
     });
   });
 
@@ -571,12 +1131,12 @@ export function createSettingsPanel(
   } else {
     updatePopoverPlacement();
   }
-  updateSelectedKey();
+  updateSelectedSettings();
 
   return {
-    setTriggerKey(triggerKey) {
-      currentTriggerKey = triggerKey;
-      updateSelectedKey();
+    setSettings(settings) {
+      currentSettings = settings;
+      updateSelectedSettings();
     },
     destroy() {
       document.removeEventListener(

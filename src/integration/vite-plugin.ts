@@ -6,7 +6,7 @@ import {
   originalPositionFor,
   type SourceMapInput
 } from "@jridgewell/trace-mapping";
-import type { Plugin } from "vite";
+import { searchForWorkspaceRoot, type Plugin } from "vite";
 import {
   normalizeRelativeFile,
   toProjectRelativeFile
@@ -82,6 +82,7 @@ export function createLocatorVitePlugin(
 ): Plugin {
   const configuredRoot = path.resolve(options.root);
   const root = realpathSync(configuredRoot);
+  const workspaceRoot = searchForWorkspaceRoot(configuredRoot);
   const store = options.store ?? new ManifestStore(root);
   const configuredSettingsPath =
     process.env.ASTRO_AI_LOCATOR_SETTINGS_PATH;
@@ -111,6 +112,7 @@ export function createLocatorVitePlugin(
   const ready = store.reset();
   const registrationHandler = createRegistrationHandler({
     root,
+    workspaceRoot,
     sessionToken: options.sessionToken,
     store
   });
@@ -135,7 +137,7 @@ export function createLocatorVitePlugin(
   };
 
   return {
-    name: "astro-ai-locator:dev",
+    name: "astro-inspector:dev",
     enforce: "pre",
     apply: "serve",
     config() {
@@ -198,7 +200,7 @@ export function createLocatorVitePlugin(
           .then(() => store.removeByFile(toRelativeProjectFile(file)))
           .catch((error: unknown) => {
             server.config.logger.error(
-              `astro-ai-locator unlink cleanup failed: ${
+              `astro-inspector unlink cleanup failed: ${
                 error instanceof Error ? error.message : String(error)
               }`
             );

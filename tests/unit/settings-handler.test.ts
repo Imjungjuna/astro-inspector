@@ -67,8 +67,13 @@ describe("createSettingsHandler", () => {
     expect(recorder.response.statusCode).toBe(200);
     expect(recorder.headers["cache-control"]).toBe("no-store");
     expect(JSON.parse(recorder.body())).toEqual({
-      schemaVersion: 1,
-      triggerKey: "alt"
+      schemaVersion: 5,
+      triggerKey: "alt",
+      colorPreset: "violet",
+      parentLevels: 1,
+      copyMode: "hash",
+      contextFields: ["location", "line"],
+      locationFormat: "path"
     });
   });
 
@@ -77,19 +82,37 @@ describe("createSettingsHandler", () => {
     const recorder = responseRecorder();
 
     await handler(
-      requestFor("PUT", { schemaVersion: 1, triggerKey: "control" }),
+      requestFor("PUT", {
+        schemaVersion: 5,
+        triggerKey: "control",
+        colorPreset: "orange",
+        parentLevels: 3,
+        copyMode: "context",
+        contextFields: ["tag", "location", "line"],
+        locationFormat: "moduleName"
+      }),
       recorder.response,
       vi.fn()
     );
 
     expect(recorder.response.statusCode).toBe(200);
     expect(JSON.parse(recorder.body())).toEqual({
-      schemaVersion: 1,
-      triggerKey: "control"
+      schemaVersion: 5,
+      triggerKey: "control",
+      colorPreset: "orange",
+      parentLevels: 3,
+      copyMode: "context",
+      contextFields: ["tag", "location", "line"],
+      locationFormat: "moduleName"
     });
     expect(JSON.parse(await readFile(settingsPath, "utf8"))).toEqual({
-      schemaVersion: 1,
-      triggerKey: "control"
+      schemaVersion: 5,
+      triggerKey: "control",
+      colorPreset: "orange",
+      parentLevels: 3,
+      copyMode: "context",
+      contextFields: ["tag", "location", "line"],
+      locationFormat: "moduleName"
     });
   });
 
@@ -98,7 +121,15 @@ describe("createSettingsHandler", () => {
     const recorder = responseRecorder();
 
     await handler(
-      requestFor("PUT", { schemaVersion: 1, triggerKey: "shift" }),
+      requestFor("PUT", {
+        schemaVersion: 5,
+        triggerKey: "shift",
+        colorPreset: "violet",
+        parentLevels: 1,
+        copyMode: "hash",
+        contextFields: ["location", "line"],
+        locationFormat: "path"
+      }),
       recorder.response,
       vi.fn()
     );
@@ -106,6 +137,78 @@ describe("createSettingsHandler", () => {
     expect(recorder.response.statusCode).toBe(400);
     expect(JSON.parse(recorder.body())).toMatchObject({
       error: expect.stringContaining("trigger key")
+    });
+  });
+
+  it("rejects an unsupported color preset without writing it", async () => {
+    const { handler } = await fixture();
+    const recorder = responseRecorder();
+
+    await handler(
+      requestFor("PUT", {
+        schemaVersion: 5,
+        triggerKey: "alt",
+        colorPreset: "pink",
+        parentLevels: 1,
+        copyMode: "hash",
+        contextFields: ["location", "line"],
+        locationFormat: "path"
+      }),
+      recorder.response,
+      vi.fn()
+    );
+
+    expect(recorder.response.statusCode).toBe(400);
+    expect(JSON.parse(recorder.body())).toMatchObject({
+      error: expect.stringContaining("color preset")
+    });
+  });
+
+  it("rejects an unsupported parent level without writing it", async () => {
+    const { handler } = await fixture();
+    const recorder = responseRecorder();
+
+    await handler(
+      requestFor("PUT", {
+        schemaVersion: 5,
+        triggerKey: "alt",
+        colorPreset: "violet",
+        parentLevels: 4,
+        copyMode: "hash",
+        contextFields: ["location", "line"],
+        locationFormat: "path"
+      }),
+      recorder.response,
+      vi.fn()
+    );
+
+    expect(recorder.response.statusCode).toBe(400);
+    expect(JSON.parse(recorder.body())).toMatchObject({
+      error: expect.stringContaining("parent levels")
+    });
+  });
+
+  it("rejects Line without Location", async () => {
+    const { handler } = await fixture();
+    const recorder = responseRecorder();
+
+    await handler(
+      requestFor("PUT", {
+        schemaVersion: 5,
+        triggerKey: "alt",
+        colorPreset: "violet",
+        parentLevels: 1,
+        copyMode: "context",
+        contextFields: ["line"],
+        locationFormat: "path"
+      }),
+      recorder.response,
+      vi.fn()
+    );
+
+    expect(recorder.response.statusCode).toBe(400);
+    expect(JSON.parse(recorder.body())).toMatchObject({
+      error: expect.stringContaining("Line requires Location")
     });
   });
 

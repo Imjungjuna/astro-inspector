@@ -14,7 +14,7 @@ async function listFiles(directory: string): Promise<string[]> {
 }
 
 describe("production output", () => {
-  it("contains no Astro AI Locator runtime", async () => {
+  it("contains no Astro Inspector runtime", async () => {
     const output = path.resolve("tests/fixtures/basic/dist");
     const files = await listFiles(output);
     const textFiles = files.filter((file) =>
@@ -25,7 +25,7 @@ describe("production output", () => {
     ).join("\n");
 
     expect(combined).not.toMatch(
-      /astro-ai-locator\/client|_astro-ai-locator\/register|data-astro-ai-locator/u
+      /astro-inspector\/client|_astro-ai-locator\/register|data-astro-ai-locator/u
     );
   });
 });

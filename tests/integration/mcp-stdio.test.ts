@@ -34,12 +34,13 @@ describe("stdio MCP server", () => {
       stderr: "pipe"
     });
     const client = new Client({
-      name: "astro-ai-locator-test",
+      name: "astro-inspector-test",
       version: "0.1.0"
     });
 
     try {
       await client.connect(transport);
+      expect(client.getServerVersion()?.name).toBe("astro-inspector");
       const result = CallToolResultSchema.parse(
         await client.callTool({
           name: "get_astro_element_by_hash",

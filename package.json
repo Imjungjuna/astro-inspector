@@ -1,7 +1,16 @@
 {
-  "name": "astro-ai-locator",
+  "name": "astro-inspector",
   "version": "0.1.0",
   "description": "Select Astro UI elements in the browser and resolve them through MCP.",
+  "packageManager": "npm@11.6.2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Imjungjuna/astro-inspector.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Imjungjuna/astro-inspector/issues"
+  },
+  "homepage": "https://github.com/Imjungjuna/astro-inspector#readme",
   "type": "module",
   "exports": {
     ".": {
@@ -18,7 +27,7 @@
     }
   },
   "bin": {
-    "astro-ai-locator-mcp": "./dist/mcp/cli.js"
+    "astro-inspector-mcp": "./dist/mcp/cli.js"
   },
   "files": [
     "dist",
@@ -41,13 +50,14 @@
     "node": ">=22.12.0"
   },
   "peerDependencies": {
-    "astro": ">=7.1.3 <8.0.0"
+    "astro": ">=7.1.3 <8.0.0",
+    "vite": ">=8.0.0 <9.0.0"
   },
   "dependencies": {
     "@astrojs/compiler-rs": "^0.3.1",
     "@babel/parser": "^7.29.7",
     "@jridgewell/trace-mapping": "^0.3.31",
-    "@modelcontextprotocol/sdk": "1.29.0",
+    "@modelcontextprotocol/sdk": "1.30.0",
     "magic-string": "^0.30.21",
     "zod": "^4.2.0"
   },
@@ -57,7 +67,6 @@
     "@types/node": "^22.15.0",
     "@vitest/coverage-v8": "^4.1.6",
     "astro": "^7.1.3",
-    "astro-ai-locator": "file:/Users/jungjun/astro-ai-locator",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "typescript": "^6.0.2",
@@ -71,5 +80,8 @@
     "component-locator"
   ],
   "license": "ISC",
+  "publishConfig": {
+    "access": "public"
+  },
   "sideEffects": false
 }

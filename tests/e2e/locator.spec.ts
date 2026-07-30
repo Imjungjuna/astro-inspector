@@ -4,34 +4,72 @@ import { expect, test, type Page } from "@playwright/test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
+import type {
+  ColorPreset,
+  ContextField,
+  LocationFormat,
+  LocatorSettings,
+  ParentLevels,
+  TriggerKey
+} from "../../src/shared/contracts.js";
 
 async function mockSettingsEndpoint(
   page: Page,
-  initialTriggerKey: "control" | "alt" | "meta" = "alt"
+  initialTriggerKey: TriggerKey = "alt",
+  initialColorPreset: ColorPreset = "violet",
+  initialParentLevels: ParentLevels = 1,
+  initialCopySettings: Partial<
+    Pick<
+      LocatorSettings,
+      "copyMode" | "contextFields" | "locationFormat"
+    >
+  > = {}
 ) {
-  let triggerKey = initialTriggerKey;
+  let settings: LocatorSettings = {
+    schemaVersion: 5,
+    triggerKey: initialTriggerKey,
+    colorPreset: initialColorPreset,
+    parentLevels: initialParentLevels,
+    copyMode: "hash",
+    contextFields: ["location", "line"],
+    locationFormat: "path",
+    ...initialCopySettings
+  };
+  let rejectNextWrite = false;
   await page.route("**/_astro-ai-locator/settings", async (route) => {
     const request = route.request();
+    if (request.method() === "PUT" && rejectNextWrite) {
+      rejectNextWrite = false;
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "settings write failed" })
+      });
+      return;
+    }
     if (request.method() === "PUT") {
-      const body = request.postDataJSON() as {
-        schemaVersion: number;
-        triggerKey: "control" | "alt" | "meta";
-      };
-      triggerKey = body.triggerKey;
+      settings = request.postDataJSON() as LocatorSettings;
     }
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify({ schemaVersion: 1, triggerKey })
+      body: JSON.stringify(settings)
     });
   });
   return {
-    current: () => triggerKey
+    current: () => ({
+      ...settings,
+      contextFields: [...settings.contextFields]
+    }),
+    rejectNextWrite: () => {
+      rejectNextWrite = true;
+    }
   };
 }
 
 test("Alt hover reveals the page map, annotated parent, current target, and structured label", async ({
   page
 }) => {
+  await mockSettingsEndpoint(page);
   await page.goto("/");
   const child = page.getByTestId("react-child-label");
   await child.evaluate((element) => {
@@ -63,14 +101,18 @@ test("Alt hover reveals the page map, annotated parent, current target, and stru
 
   const overlay = page.locator("[data-astro-ai-locator-overlay]");
   const currentBox = overlay.locator(".box");
-  const parentBox = overlay.locator(".parent-box");
-  const label = currentBox.locator(".label");
+  const parentBoxes = overlay.locator(".parent-box");
+  const parentBox = overlay.locator(
+    '.parent-box[data-parent-level="1"]'
+  );
+  const label = overlay.locator(".label");
   await expect(overlay).toBeVisible();
+  await expect(parentBoxes).toHaveCount(3);
   await expect(currentBox).toHaveCSS("border-top-style", "solid");
   await expect(currentBox).toHaveCSS("border-top-width", "2px");
   await expect(currentBox).toHaveCSS(
     "border-top-color",
-    "rgba(139, 92, 246, 0.85)"
+    "rgba(139, 92, 246, 0.9)"
   );
   await expect(currentBox).toHaveCSS(
     "background-color",
@@ -82,7 +124,7 @@ test("Alt hover reveals the page map, annotated parent, current target, and stru
   await expect(parentBox).toHaveCSS("outline-width", "2px");
   await expect(parentBox).toHaveCSS(
     "outline-color",
-    "rgba(139, 92, 246, 0.4)"
+    "rgba(139, 92, 246, 0.7)"
   );
   await expect(parentBox).toHaveCSS("outline-offset", "2px");
   await expect(parentBox).toHaveCSS(
@@ -90,6 +132,12 @@ test("Alt hover reveals the page map, annotated parent, current target, and stru
     "rgba(0, 0, 0, 0)"
   );
   await expect(parentBox.locator(".label")).toHaveCount(0);
+  await expect(
+    overlay.locator('.parent-box[data-parent-level="2"]')
+  ).toBeHidden();
+  await expect(
+    overlay.locator('.parent-box[data-parent-level="3"]')
+  ).toBeHidden();
   await expect(overlay.locator(".label")).toHaveCount(1);
 
   const parentBoxBounds = await parentBox.boundingBox();
@@ -149,6 +197,201 @@ test("Alt hover reveals the page map, annotated parent, current target, and stru
   await expect(overlay).toBeHidden();
 });
 
+test("hover label flips and clamps inside the viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 240, height: 320 });
+  await mockSettingsEndpoint(page);
+  await page.goto("/");
+  const target = page.getByTestId("card-alpha");
+  const label = page
+    .locator("[data-astro-ai-locator-overlay]")
+    .locator(".label");
+
+  await target.evaluate((element) => {
+    Object.assign((element as HTMLElement).style, {
+      position: "fixed",
+      left: "0",
+      top: "0",
+      width: "48px",
+      height: "28px",
+      zIndex: "1000"
+    });
+    element.setAttribute(
+      "data-astro-ai-locator-source-tag",
+      `VeryLongSourceComponent${"X".repeat(200)}`
+    );
+  });
+  await target.hover();
+  await page.keyboard.down("Alt");
+
+  await expect(label).toHaveAttribute("data-placement", "below");
+  await expect(label).toHaveCSS("box-sizing", "border-box");
+  await expect(label).toHaveCSS("text-overflow", "ellipsis");
+  await expect(label).toHaveCSS("white-space", "nowrap");
+  const topLeft = await label.boundingBox();
+  const initialViewport = page.viewportSize();
+  expect(topLeft?.x).toBeGreaterThanOrEqual(8);
+  expect(topLeft?.y).toBeGreaterThanOrEqual(8);
+  expect((topLeft?.x ?? 0) + (topLeft?.width ?? 0)).toBeLessThanOrEqual(
+    (initialViewport?.width ?? 0) - 8
+  );
+  expect((topLeft?.y ?? 0) + (topLeft?.height ?? 0)).toBeLessThanOrEqual(
+    (initialViewport?.height ?? 0) - 8
+  );
+
+  await target.evaluate((element) => {
+    const style = (element as HTMLElement).style;
+    style.left = "auto";
+    style.top = "auto";
+    style.right = "0";
+    style.bottom = "0";
+    window.dispatchEvent(new Event("resize"));
+  });
+
+  await expect(label).toHaveAttribute("data-placement", "above");
+  const bottomRight = await label.boundingBox();
+  const viewport = page.viewportSize();
+  expect(bottomRight?.x).toBeGreaterThanOrEqual(8);
+  expect(bottomRight?.y).toBeGreaterThanOrEqual(8);
+  expect((bottomRight?.x ?? 0) + (bottomRight?.width ?? 0)).toBeLessThanOrEqual(
+    (viewport?.width ?? 0) - 8
+  );
+  expect(
+    (bottomRight?.y ?? 0) + (bottomRight?.height ?? 0)
+  ).toBeLessThanOrEqual((viewport?.height ?? 0) - 8);
+
+  await page.setViewportSize({ width: 200, height: 280 });
+  await expect
+    .poll(async () => label.boundingBox())
+    .not.toEqual(bottomRight);
+  const resized = await label.boundingBox();
+  const resizedViewport = page.viewportSize();
+  expect(resized?.x).toBeGreaterThanOrEqual(8);
+  expect(resized?.y).toBeGreaterThanOrEqual(8);
+  expect((resized?.x ?? 0) + (resized?.width ?? 0)).toBeLessThanOrEqual(
+    (resizedViewport?.width ?? 0) - 8
+  );
+  expect((resized?.y ?? 0) + (resized?.height ?? 0)).toBeLessThanOrEqual(
+    (resizedViewport?.height ?? 0) - 8
+  );
+  expect(resized?.width ?? 0).toBeLessThan(bottomRight?.width ?? 0);
+  await page.keyboard.up("Alt");
+});
+
+test("parent levels skip zero-size and duplicate metadata ancestors", async ({
+  page
+}) => {
+  const settings = await mockSettingsEndpoint(page);
+  await page.goto("/");
+  const child = page.getByTestId("react-child-label");
+  const expectedRects = await child.evaluate((element) => {
+    const file = element.getAttribute("data-astro-ai-locator-file");
+    const loc = element.getAttribute("data-astro-ai-locator-loc");
+    const originalParent = element.parentElement;
+    if (!file || !loc || !originalParent) {
+      throw new Error("Fixture child is missing locator metadata");
+    }
+
+    const makeWrapper = (
+      testId: string,
+      padding: number
+    ): HTMLSpanElement => {
+      const wrapper = document.createElement("span");
+      wrapper.dataset.testid = testId;
+      wrapper.setAttribute("data-astro-ai-locator-file", file);
+      wrapper.setAttribute("data-astro-ai-locator-loc", loc);
+      wrapper.style.display = "inline-block";
+      wrapper.style.padding = `${padding}px`;
+      return wrapper;
+    };
+
+    const nearest = makeWrapper("parent-nearest", 4);
+    const duplicate = makeWrapper("parent-duplicate", 0);
+    const zero = makeWrapper("parent-zero", 0);
+    const second = makeWrapper("parent-second", 8);
+    const third = makeWrapper("parent-third", 12);
+    originalParent.replaceChild(third, element);
+    third.append(second);
+    second.append(zero);
+    zero.append(duplicate);
+    duplicate.append(nearest);
+    nearest.append(element);
+
+    zero.getBoundingClientRect = () =>
+      DOMRect.fromRect({ x: 0, y: 0, width: 0, height: 0 });
+    duplicate.getBoundingClientRect = () =>
+      nearest.getBoundingClientRect();
+
+    return [nearest, second, third].map((parent) => {
+      const rect = parent.getBoundingClientRect();
+      return {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height
+      };
+    });
+  });
+
+  await page.locator("[data-astro-ai-locator-launcher]").click();
+  await page
+    .getByRole("group", { name: "Parent levels" })
+    .getByRole("button", { name: "3", exact: true })
+    .click();
+  await expect.poll(settings.current).toMatchObject({ parentLevels: 3 });
+  await page.keyboard.press("Escape");
+  await child.hover();
+  await page.keyboard.down("Alt");
+
+  const overlay = page.locator("[data-astro-ai-locator-overlay]");
+  const parentBoxes = overlay.locator(".parent-box");
+  const expectedOpacity = [0.7, 0.6, 0.45];
+  for (const [index, opacity] of expectedOpacity.entries()) {
+    const parentBox = parentBoxes.nth(index);
+    await expect(parentBox).toBeVisible();
+    await expect(parentBox).toHaveCSS(
+      "outline-color",
+      `rgba(139, 92, 246, ${opacity})`
+    );
+    await expect(parentBox).toHaveCSS("outline-width", "2px");
+    await expect(parentBox).toHaveCSS("outline-offset", "2px");
+    await expect(parentBox).toHaveCSS(
+      "background-color",
+      "rgba(0, 0, 0, 0)"
+    );
+    await expect(parentBox.locator(".label")).toHaveCount(0);
+
+    const actualRect = await parentBox.boundingBox();
+    const expectedRect = expectedRects[index];
+    expect(actualRect).not.toBeNull();
+    expect(expectedRect).toBeDefined();
+    if (!actualRect || !expectedRect) {
+      throw new Error(`Parent level ${index + 1} has no rendered rect`);
+    }
+    expect(actualRect.x).toBeCloseTo(expectedRect.x, 0);
+    expect(actualRect.y).toBeCloseTo(expectedRect.y, 0);
+    expect(actualRect.width).toBeCloseTo(expectedRect.width, 0);
+    expect(actualRect.height).toBeCloseTo(expectedRect.height, 0);
+  }
+  await expect(overlay.locator(".label")).toHaveCount(1);
+  await page.keyboard.up("Alt");
+
+  await page.locator("[data-astro-ai-locator-launcher]").click();
+  await page
+    .getByRole("group", { name: "Parent levels" })
+    .getByRole("button", { name: "0", exact: true })
+    .click();
+  await expect.poll(settings.current).toMatchObject({ parentLevels: 0 });
+  await page.keyboard.press("Escape");
+  await child.hover();
+  await page.keyboard.down("Alt");
+  for (const parentBox of await parentBoxes.all()) {
+    await expect(parentBox).toBeHidden();
+  }
+  await expect(overlay.locator(".box")).toBeVisible();
+  await expect(overlay.locator(".label")).toHaveCount(1);
+  await page.keyboard.up("Alt");
+});
+
 test("Alt click registers the source and copies its hash", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => navigator.clipboard.writeText(""));
@@ -177,6 +420,257 @@ test("Alt click registers the source and copies its hash", async ({ page }) => {
     sourceTag: "article",
     domTag: "article"
   });
+});
+
+test("copy toast is centered, large, and restarts its pop animation", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 240, height: 320 });
+  await page.goto("/");
+  const target = page.getByTestId("card-alpha");
+  const toast = page.locator("[data-astro-ai-locator-toast]");
+  await toast.evaluate((element) => {
+    const state = { animationNames: [] as string[] };
+    (
+      window as unknown as {
+        __astroAiLocatorToastAnimationState: typeof state;
+      }
+    ).__astroAiLocatorToastAnimationState = state;
+    element.addEventListener("animationstart", (event) => {
+      state.animationNames.push((event as AnimationEvent).animationName);
+    });
+  });
+
+  await target.click({ modifiers: ["Alt"], position: { x: 4, y: 4 } });
+  await expect(toast).toHaveAttribute("data-visible", "");
+  await expect(toast).toHaveCSS("font-size", "14px");
+  await expect(toast).toHaveCSS(
+    "animation-name",
+    "astro-ai-locator-toast-pop"
+  );
+  await expect(toast).toHaveCSS("box-sizing", "border-box");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __astroAiLocatorToastAnimationState: {
+                animationNames: string[];
+              };
+            }
+          ).__astroAiLocatorToastAnimationState.animationNames
+      )
+    )
+    .toEqual(["astro-ai-locator-toast-pop"]);
+
+  await toast.evaluate((element) => {
+    element.textContent = `Copied ${"a-very-long-locator-message-".repeat(20)}`;
+  });
+  const untransformedHeight = await toast.evaluate((element) => {
+    const animation = element.getAnimations()[0];
+    if (!animation) {
+      throw new Error("Normal toast animation was not created");
+    }
+    animation.pause();
+    animation.currentTime = 126;
+    return (element as HTMLElement).offsetHeight;
+  });
+  const firstBox = await toast.boundingBox();
+  const viewport = page.viewportSize();
+  expect(untransformedHeight).toBeGreaterThanOrEqual(44);
+  expect(firstBox?.x).toBeGreaterThanOrEqual(16);
+  expect((firstBox?.x ?? 0) + (firstBox?.width ?? 0)).toBeLessThanOrEqual(
+    (viewport?.width ?? 0) - 16
+  );
+  expect((firstBox?.x ?? 0) + (firstBox?.width ?? 0) / 2).toBeCloseTo(
+    (viewport?.width ?? 0) / 2,
+    0
+  );
+  await toast.evaluate((element) => {
+    element.getAnimations()[0]?.play();
+  });
+
+  await page.waitForTimeout(1000);
+  await target.click({ modifiers: ["Alt"], position: { x: 4, y: 4 } });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __astroAiLocatorToastAnimationState: {
+                animationNames: string[];
+              };
+            }
+          ).__astroAiLocatorToastAnimationState.animationNames
+      )
+    )
+    .toEqual([
+      "astro-ai-locator-toast-pop",
+      "astro-ai-locator-toast-pop"
+    ]);
+
+  await page.waitForTimeout(1000);
+  await expect(toast).toHaveAttribute("data-visible", "");
+  await expect(toast).not.toHaveAttribute("data-visible", "", {
+    timeout: 1200
+  });
+});
+
+for (const copyCase of [
+  {
+    name: "Tag only",
+    fields: ["tag"] as ContextField[],
+    locationFormat: "path" as LocationFormat,
+    target: "forwarded-button"
+  },
+  {
+    name: "Path only",
+    fields: ["location"] as ContextField[],
+    locationFormat: "path" as LocationFormat,
+    target: "card-alpha"
+  },
+  {
+    name: "Path with Line",
+    fields: ["location", "line"] as ContextField[],
+    locationFormat: "path" as LocationFormat,
+    target: "card-alpha"
+  },
+  {
+    name: "Tag with Module name and Line",
+    fields: ["tag", "location", "line"] as ContextField[],
+    locationFormat: "moduleName" as LocationFormat,
+    target: "forwarded-button"
+  },
+  {
+    name: "Module name",
+    fields: ["location"] as ContextField[],
+    locationFormat: "moduleName" as LocationFormat,
+    target: "card-alpha"
+  }
+]) {
+  test(`Copy As copies ${copyCase.name}`, async ({ page }) => {
+    await mockSettingsEndpoint(page, "alt", "violet", 1, {
+      copyMode: "context",
+      contextFields: copyCase.fields,
+      locationFormat: copyCase.locationFormat
+    });
+    await page.goto("/");
+    await page.evaluate(() => navigator.clipboard.writeText(""));
+
+    const target = page.getByTestId(copyCase.target);
+    const metadata = await target.evaluate((element) => ({
+      file: element.getAttribute("data-astro-ai-locator-file"),
+      location: element.getAttribute("data-astro-ai-locator-loc"),
+      sourceTag: element.getAttribute("data-astro-ai-locator-source-tag"),
+      domTag: element.localName
+    }));
+    if (!metadata.file || !metadata.location || !metadata.sourceTag) {
+      throw new Error("Copy As fixture is missing locator metadata");
+    }
+
+    const tag =
+      metadata.sourceTag === metadata.domTag
+        ? `<${metadata.sourceTag}>`
+        : `<${metadata.sourceTag}→${metadata.domTag}>`;
+    const workspacePath = `/tests/fixtures/basic/${metadata.file}`;
+    const locationValue =
+      copyCase.locationFormat === "moduleName"
+        ? path.posix.basename(metadata.file)
+        : workspacePath;
+    const expectedParts: string[] = [];
+    if (copyCase.fields.includes("tag")) {
+      expectedParts.push(tag);
+    }
+    if (copyCase.fields.includes("location")) {
+      expectedParts.push(
+        copyCase.fields.includes("line")
+          ? `${locationValue}:${metadata.location}`
+          : locationValue
+      );
+    }
+    const expected = expectedParts.join(" | ");
+
+    await target.click({ modifiers: ["Alt"], position: { x: 4, y: 4 } });
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(expected);
+    await expect(
+      page.locator("[data-astro-ai-locator-toast]")
+    ).toContainText("Copied context");
+  });
+}
+
+test("Copy As prompt fallback receives the exact Context payload", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page, "alt", "violet", 1, {
+    copyMode: "context",
+    contextFields: ["tag", "location", "line"],
+    locationFormat: "path"
+  });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator.clipboard, "writeText", {
+      configurable: true,
+      value: async () => {
+        throw new Error("clipboard blocked");
+      }
+    });
+    Document.prototype.execCommand = () => false;
+    window.prompt = (message, value) => {
+      document.documentElement.dataset.copyPromptMessage = message;
+      document.documentElement.dataset.copyPromptValue = value ?? "";
+      return null;
+    };
+  });
+  await page.goto("/");
+
+  const target = page.getByTestId("forwarded-button");
+  const location = await target.getAttribute("data-astro-ai-locator-loc");
+  if (!location) {
+    throw new Error("Copy As fixture is missing a source location");
+  }
+  const expected =
+    `<ForwardedButton→button> | /tests/fixtures/basic/src/pages/index.astro:${location}`;
+  await target.click({ modifiers: ["Alt"] });
+
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-copy-prompt-value",
+    expected
+  );
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-copy-prompt-message",
+    "Copy Astro locator context:"
+  );
+});
+
+test("Copy As does not copy when registration fails", async ({ page }) => {
+  await mockSettingsEndpoint(page, "alt", "violet", 1, {
+    copyMode: "context",
+    contextFields: ["tag"],
+    locationFormat: "path"
+  });
+  await page.route("**/_astro-ai-locator/register", async (route) => {
+    await route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "registration failed" })
+    });
+  });
+  await page.goto("/");
+  await page.evaluate(() => navigator.clipboard.writeText("untouched"));
+
+  await page
+    .getByTestId("card-alpha")
+    .click({ modifiers: ["Alt"], position: { x: 4, y: 4 } });
+
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe("untouched");
+  await expect(
+    page.locator("[data-astro-ai-locator-toast]")
+  ).toContainText("Registration failed with HTTP 500");
 });
 
 test("component call-site metadata reaches its rendered child DOM", async ({
@@ -516,7 +1010,7 @@ test("the floating launcher exposes the settings hierarchy", async ({
   await expect(launcher).toHaveAttribute("aria-expanded", "false");
   await expect(launcher).toHaveAttribute(
     "aria-label",
-    "Open Astro AI Locator settings"
+    "Open Astro Inspector settings"
   );
   await expect(page.locator("[data-fox-mark] path")).toHaveAttribute(
     "fill",
@@ -561,10 +1055,12 @@ test("the floating launcher exposes the settings hierarchy", async ({
   await expect(popover).toHaveCSS("color", "rgb(244, 244, 245)");
   await expect(popover).toContainText("Trigger");
   await expect(popover).toContainText("Option / Alt");
+  await expect(popover).toContainText("Copy As");
   await expect(popover).toContainText("Preferences");
   await expect(popover).toContainText("Overlay Color");
+  await expect(popover).toContainText("Parent Levels");
   const sectionHeadings = popover.locator(".section-heading");
-  await expect(sectionHeadings).toHaveCount(2);
+  await expect(sectionHeadings).toHaveCount(3);
   for (const heading of await sectionHeadings.all()) {
     await expect(heading).toHaveCSS("color", "rgb(244, 244, 245)");
     await expect(heading).toHaveCSS("font-size", "12px");
@@ -572,18 +1068,24 @@ test("the floating launcher exposes the settings hierarchy", async ({
   }
   await expect(popover.getByText(/^Drag to move\./u)).toHaveCount(0);
   await expect(popover.locator("[data-ui-color-chip]")).toHaveCount(4);
-  await expect(popover.locator(".preference-row")).toHaveCSS(
-    "height",
-    "28px"
-  );
-  await expect(popover.locator(".preference-row")).toHaveCSS(
-    "font-weight",
-    "400"
-  );
-  await expect(popover.locator(".preference-row")).toHaveCSS(
-    "color",
-    "rgb(250, 250, 250)"
-  );
+  const preferenceRows = popover.locator(".preference-row");
+  await expect(preferenceRows).toHaveCount(2);
+  for (const row of await preferenceRows.all()) {
+    await expect(row).toHaveCSS("height", "28px");
+    await expect(row).toHaveCSS("font-weight", "400");
+    await expect(row).toHaveCSS("color", "rgb(250, 250, 250)");
+  }
+  const parentGroup = popover.getByRole("group", {
+    name: "Parent levels"
+  });
+  const parentButtons = parentGroup.getByRole("button");
+  await expect(parentButtons).toHaveCount(4);
+  await expect(
+    parentGroup.getByRole("button", { name: "1", exact: true })
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    parentGroup.getByRole("button", { name: "0", exact: true })
+  ).toHaveAttribute("aria-pressed", "false");
   await expect(popover).toHaveCSS(
     "transform",
     "matrix(1, 0, 0, 1, 0, 0)"
@@ -666,7 +1168,7 @@ test("the floating launcher exposes the settings hierarchy", async ({
     "rgba(255, 255, 255, 0.14)"
   );
   await controlChoice.click();
-  await expect.poll(settings.current).toBe("control");
+  await expect.poll(() => settings.current().triggerKey).toBe("control");
   await expect(controlChoice).toHaveAttribute("aria-pressed", "true");
   await expect(controlKeycap).toHaveCSS(
     "background-color",
@@ -677,6 +1179,468 @@ test("the floating launcher exposes the settings hierarchy", async ({
     "background-color",
     "rgba(255, 255, 255, 0.1)"
   );
+});
+
+test("Copy As defaults to Hash between Trigger and Preferences", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  await page.goto("/");
+  await page.locator("[data-astro-ai-locator-launcher]").click();
+
+  const popover = page.locator("[data-astro-ai-locator-popover]");
+  await expect(popover.locator(".section-heading")).toHaveText([
+    "Trigger",
+    "Copy As",
+    "Preferences"
+  ]);
+
+  const copySection = popover.locator("[data-copy-as-section]");
+  const copyModes = copySection.getByRole("radiogroup", {
+    name: "Copy mode"
+  });
+  const hashMode = copyModes.getByRole("radio", { name: "Hash" });
+  const contextMode = copyModes.getByRole("radio", {
+    name: "Context"
+  });
+  const cue = contextMode.locator("[data-context-cue]");
+  const contextPanel = copySection.locator("[data-context-options]");
+  const triggerChoice = popover.getByRole("button", {
+    name: "Option / Alt"
+  });
+
+  await expect(hashMode).toHaveAttribute("aria-checked", "true");
+  await expect(contextMode).toHaveAttribute("aria-checked", "false");
+  await expect(contextMode).toHaveAttribute("aria-expanded", "false");
+  await expect(contextMode).toHaveAttribute(
+    "aria-controls",
+    "astro-ai-locator-context-options"
+  );
+  await expect(
+    copySection.locator("[data-context-disclosure]")
+  ).toHaveCount(0);
+  await expect(cue).toHaveCSS("pointer-events", "none");
+  await expect(cue).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(
+    hashMode.locator("[data-copy-mode-keycap]")
+  ).toHaveText("#");
+  await expect(
+    contextMode.locator("[data-copy-mode-keycap]")
+  ).toHaveText("@");
+  await expect(
+    hashMode.locator("[data-copy-mode-keycap]")
+  ).toHaveCSS("background-color", "rgb(124, 58, 237)");
+  await expect(
+    contextMode.locator("[data-copy-mode-keycap]")
+  ).toHaveCSS("background-color", "rgba(255, 255, 255, 0.1)");
+  await expect(contextPanel).toHaveAttribute("aria-hidden", "true");
+  await expect(
+    copySection.locator('[data-context-field="location"]')
+  ).toHaveAttribute("tabindex", "-1");
+  await expect(
+    hashMode.locator("[data-copy-mode-keycap]")
+  ).toHaveCSS("font-weight", "400");
+  await expect(
+    contextMode.locator("[data-copy-mode-keycap]")
+  ).toHaveCSS("font-weight", "400");
+  await expect(
+    popover
+      .getByRole("group", { name: "Parent levels" })
+      .getByRole("button")
+      .first()
+  ).toHaveCSS("font-weight", "400");
+
+  const triggerBox = await triggerChoice.boundingBox();
+  const hashBox = await hashMode.boundingBox();
+  const contextBox = await contextMode.boundingBox();
+  expect(hashBox?.width).toBeCloseTo(triggerBox?.width ?? 0, 0);
+  expect(contextBox?.width).toBeCloseTo(triggerBox?.width ?? 0, 0);
+});
+
+test("Copy As enforces Location and Line dependencies while retaining format", async ({
+  page
+}) => {
+  const settings = await mockSettingsEndpoint(page);
+  await page.goto("/");
+  await page.locator("[data-astro-ai-locator-launcher]").click();
+
+  const copySection = page.locator("[data-copy-as-section]");
+  const contextMode = copySection.getByRole("radio", { name: "Context" });
+  const cue = contextMode.locator("[data-context-cue]");
+  await contextMode.click();
+
+  const contextPanel = copySection.locator("[data-context-options]");
+  const tag = copySection.getByRole("checkbox", { name: "Tag" });
+  const location = copySection.getByRole("checkbox", {
+    name: "Location"
+  });
+  const line = copySection.getByRole("checkbox", { name: "Line" });
+  const formatPanel = copySection.locator("[data-location-format-options]");
+  const pathOption = copySection.getByRole("radio", {
+    name: "Path",
+    exact: true
+  });
+  const moduleName = copySection.getByRole("radio", {
+    name: "Module name"
+  });
+
+  await expect.poll(settings.current).toMatchObject({
+    copyMode: "context",
+    contextFields: ["location", "line"],
+    locationFormat: "path"
+  });
+  await expect(contextMode).toHaveAttribute("aria-expanded", "true");
+  await expect(contextPanel).toHaveAttribute("aria-hidden", "false");
+  await expect(contextPanel).toHaveCSS(
+    "transition-duration",
+    /^0\.18s(?:, 0\.18s)?$/u
+  );
+  await expect(cue).toHaveCSS("transition-duration", "0.18s");
+  await expect(tag).toHaveAttribute("aria-checked", "false");
+  await expect(location).toHaveAttribute("aria-checked", "true");
+  await expect(location).toHaveAttribute(
+    "aria-controls",
+    "astro-ai-locator-location-format-options"
+  );
+  await expect(line).toHaveAttribute("aria-checked", "true");
+  await expect(line).not.toHaveAttribute("aria-controls", /.+/u);
+  await expect(pathOption).toHaveAttribute("aria-checked", "true");
+  await expect(moduleName).toHaveAttribute("aria-checked", "false");
+  await expect(formatPanel).toHaveAttribute("aria-hidden", "false");
+  await expect(formatPanel).toHaveCSS(
+    "transition-duration",
+    /^0\.18s(?:, 0\.18s)?$/u
+  );
+
+  const modeBox = await contextMode.boundingBox();
+  const locationBox = await location.boundingBox();
+  const pathBox = await pathOption.boundingBox();
+  expect(modeBox).not.toBeNull();
+  expect(locationBox).not.toBeNull();
+  expect(pathBox).not.toBeNull();
+  expect(locationBox?.x ?? 0).toBeGreaterThan(modeBox?.x ?? 0);
+  expect(pathBox?.x ?? 0).toBeGreaterThan(locationBox?.x ?? 0);
+
+  await location.click();
+  await expect.poll(settings.current).toMatchObject({
+    copyMode: "hash",
+    contextFields: []
+  });
+  await expect(location).toHaveAttribute("aria-checked", "false");
+  await expect(line).toHaveAttribute("aria-checked", "false");
+  await expect(line).toBeDisabled();
+  await expect(formatPanel).toHaveAttribute("aria-hidden", "true");
+  await expect(contextMode).toHaveAttribute("aria-expanded", "true");
+
+  await location.click();
+  await expect.poll(settings.current).toMatchObject({
+    copyMode: "context",
+    contextFields: ["location"],
+    locationFormat: "path"
+  });
+  await expect(line).toBeEnabled();
+  await expect(line).toHaveAttribute("aria-checked", "false");
+  await expect(formatPanel).toHaveAttribute("aria-hidden", "false");
+
+  await moduleName.click();
+  await expect.poll(settings.current).toMatchObject({
+    copyMode: "context",
+    contextFields: ["location"],
+    locationFormat: "moduleName"
+  });
+  await expect(moduleName).toHaveAttribute("aria-checked", "true");
+
+  await line.click();
+  await expect.poll(settings.current).toMatchObject({
+    contextFields: ["location", "line"]
+  });
+  await location.click();
+  await location.click();
+  await expect.poll(settings.current).toMatchObject({
+    copyMode: "context",
+    contextFields: ["location"],
+    locationFormat: "moduleName"
+  });
+  await expect(moduleName).toHaveAttribute("aria-checked", "true");
+  await expect(line).toHaveAttribute("aria-checked", "false");
+});
+
+test("Copy As keeps Context disclosure independent and starts closed after reload", async ({
+  page
+}) => {
+  const settings = await mockSettingsEndpoint(
+    page,
+    "alt",
+    "violet",
+    1,
+    { contextFields: [] }
+  );
+  await page.goto("/");
+  await page.locator("[data-astro-ai-locator-launcher]").click();
+
+  const copySection = page.locator("[data-copy-as-section]");
+  const hashMode = copySection.getByRole("radio", { name: "Hash" });
+  const contextMode = copySection.getByRole("radio", {
+    name: "Context"
+  });
+  const tag = copySection.getByRole("checkbox", { name: "Tag" });
+
+  await contextMode.click();
+  await expect(contextMode).toHaveAttribute("aria-expanded", "true");
+  await expect(hashMode).toHaveAttribute("aria-checked", "true");
+  await expect(contextMode).toHaveAttribute("aria-checked", "false");
+  expect(settings.current().contextFields).toEqual([]);
+
+  await tag.click();
+  await expect.poll(settings.current).toMatchObject({
+    copyMode: "context",
+    contextFields: ["tag"]
+  });
+  await expect(contextMode).toHaveAttribute("aria-checked", "true");
+
+  await hashMode.click();
+  await expect(hashMode).toHaveAttribute("aria-checked", "true");
+  await expect(contextMode).toHaveAttribute("aria-expanded", "true");
+  await contextMode.click();
+  await expect(contextMode).toHaveAttribute("aria-checked", "true");
+  await expect(contextMode).toHaveAttribute("aria-expanded", "true");
+  await contextMode.click();
+  await expect(contextMode).toHaveAttribute("aria-expanded", "false");
+  await contextMode.click();
+  await expect(contextMode).toHaveAttribute("aria-expanded", "true");
+  await hashMode.click();
+  await expect(contextMode).toHaveAttribute("aria-expanded", "true");
+
+  await page.reload();
+  await page.locator("[data-astro-ai-locator-launcher]").click();
+  await expect(
+    page
+      .locator("[data-copy-as-section]")
+      .getByRole("radio", { name: "Context" })
+  ).toHaveAttribute("aria-expanded", "false");
+});
+
+test("Copy As restores accepted state after a rejected settings write", async ({
+  page
+}) => {
+  const settings = await mockSettingsEndpoint(page);
+  await page.goto("/");
+  await page.locator("[data-astro-ai-locator-launcher]").click();
+
+  const copySection = page.locator("[data-copy-as-section]");
+  await copySection.getByRole("radio", { name: "Context" }).click();
+  const tag = copySection.getByRole("checkbox", { name: "Tag" });
+  settings.rejectNextWrite();
+  await tag.click();
+
+  await expect(
+    page.locator("[data-astro-ai-locator-toast]")
+  ).toContainText("HTTP 500");
+  await expect(tag).toHaveAttribute("aria-checked", "false");
+  await expect(
+    copySection.getByRole("radio", { name: "Context" })
+  ).toHaveAttribute("aria-checked", "true");
+});
+
+test("overlay color presets persist and recolor locator accents", async ({
+  page
+}) => {
+  const settings = await mockSettingsEndpoint(page);
+  await page.goto("/");
+
+  const launcher = page.locator("[data-astro-ai-locator-launcher]");
+  const popover = page.locator("[data-astro-ai-locator-popover]");
+  await launcher.click();
+
+  const colorGroup = popover.getByRole("group", {
+    name: "Overlay color"
+  });
+  const neutral = colorGroup.getByRole("button", { name: "Neutral" });
+  const violet = colorGroup.getByRole("button", { name: "Violet" });
+  const orange = colorGroup.getByRole("button", { name: "Orange" });
+  const sky = colorGroup.getByRole("button", { name: "Sky" });
+  await expect(neutral).toBeVisible();
+  await expect(violet).toHaveAttribute("aria-pressed", "true");
+  await expect(orange).toHaveAttribute("aria-pressed", "false");
+  await expect(sky).toBeVisible();
+
+  await orange.click();
+  await expect.poll(settings.current).toEqual({
+    schemaVersion: 5,
+    triggerKey: "alt",
+    colorPreset: "orange",
+    parentLevels: 1,
+    copyMode: "hash",
+    contextFields: ["location", "line"],
+    locationFormat: "path"
+  });
+  await expect(orange).toHaveAttribute("aria-pressed", "true");
+  await expect(violet).toHaveAttribute("aria-pressed", "false");
+  await expect(orange).toHaveCSS(
+    "box-shadow",
+    "rgba(63, 63, 70, 0.8) 0px 0px 0px 2px, rgb(234, 88, 12) 0px 0px 0px 4px"
+  );
+
+  const altChoice = popover.getByRole("button", { name: "Option / Alt" });
+  await expect(altChoice.locator("[data-modifier-keycap]")).toHaveCSS(
+    "background-color",
+    "rgb(234, 88, 12)"
+  );
+  const controlChoice = popover.getByRole("button", { name: "Control" });
+  await controlChoice.hover();
+  await expect(controlChoice).toHaveCSS(
+    "background-color",
+    "rgba(255, 255, 255, 0.14)"
+  );
+
+  await page.keyboard.press("Escape");
+  const child = page.getByTestId("react-child-label");
+  await child.hover();
+  await page.keyboard.down("Alt");
+
+  const overlay = page.locator("[data-astro-ai-locator-overlay]");
+  await expect(overlay.locator(".box")).toHaveCSS(
+    "border-top-color",
+    "rgba(251, 146, 60, 0.9)"
+  );
+  await expect(overlay.locator(".box")).toHaveCSS(
+    "background-color",
+    "rgba(251, 146, 60, 0.1)"
+  );
+  await expect(
+    overlay.locator('.parent-box[data-parent-level="1"]')
+  ).toHaveCSS(
+    "outline-color",
+    "rgba(251, 146, 60, 0.7)"
+  );
+  await expect(overlay.locator(".label")).toHaveCSS(
+    "background-color",
+    "rgb(194, 65, 12)"
+  );
+  await page.keyboard.up("Alt");
+
+  await page.reload();
+  await page.locator("[data-astro-ai-locator-launcher]").click();
+  await expect(
+    page
+      .getByRole("group", { name: "Overlay color" })
+      .getByRole("button", { name: "Orange" })
+  ).toHaveAttribute("aria-pressed", "true");
+});
+
+test("parent level preference persists schema v5", async ({ page }) => {
+  const settings = await mockSettingsEndpoint(page);
+  await page.goto("/");
+
+  await page.locator("[data-astro-ai-locator-launcher]").click();
+  const group = page
+    .locator("[data-astro-ai-locator-popover]")
+    .getByRole("group", { name: "Parent levels" });
+  const levelOne = group.getByRole("button", {
+    name: "1",
+    exact: true
+  });
+  const levelThree = group.getByRole("button", {
+    name: "3",
+    exact: true
+  });
+
+  await levelThree.click();
+
+  await expect.poll(settings.current).toEqual({
+    schemaVersion: 5,
+    triggerKey: "alt",
+    colorPreset: "violet",
+    parentLevels: 3,
+    copyMode: "hash",
+    contextFields: ["location", "line"],
+    locationFormat: "path"
+  });
+  await expect(levelThree).toHaveAttribute("aria-pressed", "true");
+  await expect(levelThree).toHaveCSS(
+    "background-color",
+    "rgb(124, 58, 237)"
+  );
+  await expect(levelOne).toHaveAttribute("aria-pressed", "false");
+});
+
+test("parent level changes redraw an active target without deactivating the locator", async ({
+  page
+}) => {
+  const settings = await mockSettingsEndpoint(page);
+  await page.goto("/");
+
+  const child = page.getByTestId("react-child-label");
+  await child.hover();
+  await page.keyboard.down("Alt");
+
+  const overlay = page.locator("[data-astro-ai-locator-overlay]");
+  await expect(
+    overlay.locator('.parent-box[data-parent-level="1"]')
+  ).toBeVisible();
+  await page.locator("[data-astro-ai-locator-launcher]").click();
+  const parentGroup = page
+    .locator("[data-astro-ai-locator-popover]")
+    .getByRole("group", { name: "Parent levels" });
+  await parentGroup
+    .getByRole("button", { name: "0", exact: true })
+    .click();
+  await expect.poll(settings.current).toMatchObject({ parentLevels: 0 });
+
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-astro-ai-locator-active",
+    ""
+  );
+  await expect(overlay).toHaveCount(1);
+  await expect(overlay.locator(".box")).toBeVisible();
+  for (const parentBox of await overlay.locator(".parent-box").all()) {
+    await expect(parentBox).toBeHidden();
+  }
+  await page.keyboard.up("Alt");
+});
+
+test("a rejected parent level write preserves the accepted UI and overlay", async ({
+  page
+}) => {
+  const settings = await mockSettingsEndpoint(page);
+  await page.goto("/");
+  await page.locator("[data-astro-ai-locator-launcher]").click();
+
+  const parentGroup = page
+    .locator("[data-astro-ai-locator-popover]")
+    .getByRole("group", { name: "Parent levels" });
+  const levelOne = parentGroup.getByRole("button", {
+    name: "1",
+    exact: true
+  });
+  const levelThree = parentGroup.getByRole("button", {
+    name: "3",
+    exact: true
+  });
+  settings.rejectNextWrite();
+  await levelThree.click();
+  await expect(
+    page.locator("[data-astro-ai-locator-toast]")
+  ).toContainText("HTTP 500");
+
+  await expect(levelOne).toHaveAttribute("aria-pressed", "true");
+  await expect(levelThree).toHaveAttribute("aria-pressed", "false");
+  expect(settings.current().parentLevels).toBe(1);
+
+  await page.keyboard.press("Escape");
+  await page.getByTestId("react-child-label").hover();
+  await page.keyboard.down("Alt");
+  const overlay = page.locator("[data-astro-ai-locator-overlay]");
+  await expect(
+    overlay.locator('.parent-box[data-parent-level="1"]')
+  ).toBeVisible();
+  await expect(
+    overlay.locator('.parent-box[data-parent-level="2"]')
+  ).toBeHidden();
+  await expect(
+    overlay.locator('.parent-box[data-parent-level="3"]')
+  ).toBeHidden();
+  await page.keyboard.up("Alt");
 });
 
 test("the launcher toggles independently from the locator trigger", async ({
@@ -705,7 +1669,7 @@ test("the launcher toggles independently from the locator trigger", async ({
   await expect(launcher).toBeFocused();
   await expect(launcher).toHaveAttribute(
     "aria-label",
-    "Open Astro AI Locator settings"
+    "Open Astro Inspector settings"
   );
 
   await launcher.click();
@@ -774,9 +1738,60 @@ test("the settings popover removes motion when reduced motion is preferred", asy
   await mockSettingsEndpoint(page);
   await page.goto("/");
 
+  await page
+    .getByTestId("card-alpha")
+    .click({ modifiers: ["Alt"], position: { x: 4, y: 4 } });
+  await expect(
+    page.locator("[data-astro-ai-locator-toast]")
+  ).toHaveCSS("animation-name", "astro-ai-locator-toast-fade");
+  const reducedMotionToast = page.locator(
+    "[data-astro-ai-locator-toast]"
+  );
+  const reducedMotionFrames = await reducedMotionToast.evaluate(
+    (element) => {
+      const animation = element.getAnimations()[0];
+      const effect = animation?.effect;
+      if (!animation || !(effect instanceof KeyframeEffect)) {
+        throw new Error("Reduced-motion toast animation was not created");
+      }
+      const hasTransformKeyframe = effect
+        .getKeyframes()
+        .some((frame) => "transform" in frame);
+      animation.pause();
+      animation.currentTime = 0;
+      const startTransform = getComputedStyle(element).transform;
+      animation.currentTime = 900;
+      const middleTransform = getComputedStyle(element).transform;
+      return {
+        hasTransformKeyframe,
+        middleTransform,
+        startTransform
+      };
+    }
+  );
+  expect(reducedMotionFrames.hasTransformKeyframe).toBe(false);
+  expect(reducedMotionFrames.middleTransform).toBe(
+    reducedMotionFrames.startTransform
+  );
+
   const launcher = page.locator("[data-astro-ai-locator-launcher]");
   const popover = page.locator("[data-astro-ai-locator-popover]");
   await launcher.click();
   await expect(popover).toBeVisible();
   await expect(popover).toHaveCSS("transition-duration", "0s");
+
+  const copySection = page.locator("[data-copy-as-section]");
+  const contextMode = copySection.getByRole("radio", {
+    name: "Context"
+  });
+  await contextMode.click();
+  await expect(
+    copySection.locator("[data-context-options]")
+  ).toHaveCSS("transition-duration", "0s");
+  await expect(
+    copySection.locator("[data-location-format-options]")
+  ).toHaveCSS("transition-duration", "0s");
+  await expect(
+    contextMode.locator("[data-context-cue]")
+  ).toHaveCSS("transition-duration", "0s");
 });

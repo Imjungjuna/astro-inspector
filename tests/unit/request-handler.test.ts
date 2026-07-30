@@ -1,4 +1,9 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  writeFile
+} from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import os from "node:os";
@@ -39,8 +44,12 @@ function responseRecorder() {
 }
 
 describe("createRegistrationHandler", () => {
-  it("registers a validated Astro source element", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
+  it("returns a workspace-relative file without persisting browser-only data", async () => {
+    const workspaceRoot = await mkdtemp(
+      path.join(os.tmpdir(), "astro-locator-workspace-")
+    );
+    const root = path.join(workspaceRoot, "apps", "astro");
+    await mkdir(root, { recursive: true });
     const source = path.join(root, "src", "Card.astro");
     await mkdir(path.dirname(source), { recursive: true });
     await writeFile(source, "<article>Card</article>\n", "utf8");
@@ -48,6 +57,7 @@ describe("createRegistrationHandler", () => {
     await store.reset();
     const handler = createRegistrationHandler({
       root,
+      workspaceRoot,
       sessionToken: "session-token",
       store
     });
@@ -66,12 +76,28 @@ describe("createRegistrationHandler", () => {
     );
 
     expect(recorder.response.statusCode).toBe(200);
-    expect(JSON.parse(recorder.body()).hash).toMatch(
+    const responseBody = JSON.parse(recorder.body());
+    expect(responseBody.hash).toMatch(
       /^astro_hash_[a-f0-9]{24}$/
     );
-    expect(JSON.parse(await readFile(store.manifestPath, "utf8"))).toMatchObject({
-      schemaVersion: 1
+    expect(responseBody.workspaceFile).toBe("/apps/astro/src/Card.astro");
+    expect(responseBody).not.toHaveProperty("absoluteFile");
+    const manifest = JSON.parse(
+      await readFile(store.manifestPath, "utf8")
+    );
+    expect(manifest).toEqual({
+      schemaVersion: 1,
+      entries: {
+        [responseBody.hash]: {
+          file: "src/Card.astro",
+          line: 1,
+          column: 1,
+          sourceTag: "article",
+          domTag: "article"
+        }
+      }
     });
+    expect(JSON.stringify(manifest)).not.toContain("workspaceFile");
   });
 
   it("registers a validated TSX source element", async () => {
@@ -83,6 +109,7 @@ describe("createRegistrationHandler", () => {
     await store.reset();
     const handler = createRegistrationHandler({
       root,
+      workspaceRoot: root,
       sessionToken: "session-token",
       store
     });
@@ -102,6 +129,7 @@ describe("createRegistrationHandler", () => {
 
     expect(recorder.response.statusCode).toBe(200);
     expect(JSON.parse(recorder.body())).toMatchObject({
+      workspaceFile: "/src/Button.tsx",
       entry: {
         file: "src/Button.tsx",
         line: 1,
@@ -130,6 +158,7 @@ describe("createRegistrationHandler", () => {
     await store.reset();
     const handler = createRegistrationHandler({
       root,
+      workspaceRoot: root,
       sessionToken: "session-token",
       store
     });
@@ -162,6 +191,7 @@ describe("createRegistrationHandler", () => {
     await store.reset();
     const handler = createRegistrationHandler({
       root,
+      workspaceRoot: root,
       sessionToken: "session-token",
       store
     });
@@ -191,6 +221,7 @@ describe("createRegistrationHandler", () => {
     await store.reset();
     const handler = createRegistrationHandler({
       root,
+      workspaceRoot: root,
       sessionToken: "session-token",
       store
     });
@@ -223,6 +254,7 @@ describe("createRegistrationHandler", () => {
     await store.reset();
     const handler = createRegistrationHandler({
       root,
+      workspaceRoot: root,
       sessionToken: "session-token",
       store
     });
@@ -249,6 +281,7 @@ describe("createRegistrationHandler", () => {
     await store.reset();
     const handler = createRegistrationHandler({
       root,
+      workspaceRoot: root,
       sessionToken: "session-token",
       store
     });
@@ -278,6 +311,7 @@ describe("createRegistrationHandler", () => {
     await store.reset();
     const handler = createRegistrationHandler({
       root,
+      workspaceRoot: root,
       sessionToken: "session-token",
       store
     });

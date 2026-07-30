@@ -1,35 +1,55 @@
-# Astro AI Locator — Future Work
+# Astro Inspector — Future Work
 
 > 2026-07-28 기록 · 다음 작업 세션의 기준 문서
 >
 > 현재 기준선: 개발 서버에서 Astro/React DOM을 추적하고, 트리거 키를
 > 누른 채 호버하면 전체 요소·가장 가까운 메타데이터 조상·현재 요소를
 > 구분해 표시한다. 클릭 시 locator hash를 복사하고 MCP가 manifest
-> entry를 조회한다. 마지막 `npm run verify`에서 unit 62개, MCP integration
-> 1개, E2E 13개, production output 1개와 TypeScript build가 통과했다.
+> entry를 조회한다. 마지막 `npm run verify`에서 unit 92개, MCP integration
+> 1개, E2E 29개, production output 1개와 TypeScript build가 통과했다.
 
 ## 다음 구현 후보
 
-### 1. UI 색상 프리셋
+### 0. 패키지·폴더 이름 변경 ✅ 2026-07-30 완료
 
-팝오버의 `Overlay Color` 칩을 실제 설정 컨트롤로 만든다.
+패키지가 직접 AI 기능을 실행하는 것처럼 보이지 않도록 공개 이름을
+`astro-inspector`로 변경했다.
 
-- 칩 클릭 시 선택한 색상을 전역 설정에 저장한다.
-- 선택된 트리거 행의 keycap 또는 SVG `fill`에 선택 색상을 적용한다.
-- locator의 현재 요소 테두리·채움과 부모 테두리에 같은 색상 계열을
-  적용한다.
-- 행 hover 배경도 선택 색상에서 파생하되, 텍스트 대비와 현재의
-  반투명 dark popover 분위기는 유지한다.
-- 고정 preset부터 시작하고 자유 색상 선택기는 나중으로 미룬다.
+확정한 이름:
 
-결정이 필요한 것:
+- npm package: `astro-inspector`
+- repository/folder: `astro-inspector`
+- 사용자 노출 제품명: `Astro Inspector`
 
-- 색상이 적용될 정확한 대상: keycap만인지, fox SVG도 포함하는지.
-- 부모 경계는 현재 요소와 같은 hue만 공유할지, 별도 neutral color로
-  둘지.
-- preset 목록과 각 preset의 border/fill/hover 알파값.
+변경 범위:
 
-### 2. 표시할 메타데이터 조상 개수
+- `package.json`의 `name`, exports, bin 및 관련 package metadata.
+- integration import, CLI/MCP 등록 명령, local `file:` 설치 예시.
+- README, fixture, 테스트, 문서와 오류 메시지의 사용자 노출 이름.
+- MCP server 이름과 Claude/Codex 등록 예시.
+- npm publish 전에 package name 사용 가능 여부 확인.
+
+기존 `data-astro-ai-locator-*`, `astro_hash_*`, `.astro-ai-locator` 저장
+경로는 protocol compatibility를 위해 유지한다. 기존 `astroAiLocator()`
+export도 deprecated alias로 남기고, 새 기본 예시는 `astroInspector()`를
+사용한다.
+
+### 1. UI 색상 프리셋 ✅ 2026-07-29 완료
+
+팝오버의 `Overlay Color` 칩을 실제 설정 컨트롤로 만들었다.
+
+- `Neutral`, `Violet`, `Orange`, `Sky` 네 preset을 제공한다.
+- 기본값은 `Violet`이며 schema v1도 기존 trigger를 보존해 이 값으로
+  migration한다.
+- 현재 요소 테두리·채움, 부모 테두리, 라벨, 선택된 keycap과 chip ring에
+  같은 색상 계열을 적용한다.
+- trigger 행 hover, FAB, popover surface는 neutral grey를 유지한다.
+- 설정은 `Copy As Location`이 추가된 현재 전역 settings schema v5에서도
+  그대로 유지한다.
+
+자유 색상 선택기는 현재 범위에 포함하지 않는다.
+
+### 2. 표시할 메타데이터 조상 개수 — 완료
 
 팝오버에 `Parent Levels` 선택 그룹을 추가한다.
 
@@ -78,50 +98,53 @@
 - 목표 길이와 허용 가능한 충돌 확률.
 - 기존 hash 지원 기간과 manifest migration 방식.
 
-### 4. 복사할 정보 선택
+### 4. 복사할 정보 선택 ✅ 2026-07-30 완료
 
-팝오버에 `Copy As` 설정을 추가한다.
+팝오버의 `Copy As`를 Hash와 Context의 상호 배타적인 모드로 구현했다.
 
-후보:
+- 기본값 `Hash`는 기존 MCP lookup token만 복사한다.
+- `Context`는 Tag, Location, Line 조합을 선택한다.
+- 출력 순서는 설정 클릭 순서와 무관하게 Tag → Location으로 고정한다.
+- Line은 Location이 선택된 동안에만 활성화되며, Location을 끄면 함께
+  해제된다.
+- Location은 Vite workspace root 기준 `/` 시작 Path 또는 확장자를 포함한
+  Module name 중 하나로 표시한다.
+- workspace Path는 인증된 click-time registration 응답에서만 전달하고
+  DOM, manifest, MCP, settings에는 저장하지 않는다.
+- Context 전체 행이 disclosure click target이다. Hash에서 Context를
+  선택하면 자동으로 열리고, Hash로 돌아가도 disclosure 상태는 유지된다.
+  페이지 로드 시에는 닫힌 상태로 시작한다.
+- 기존 단일 registration pipeline을 유지해 두 모드 모두 manifest
+  freshness와 source validation을 공유한다.
 
-- `Locator token` — 기본값. MCP가 entry를 정확히 찾는다.
-- `Module` — source component/tag 이름을 복사한다.
-- `File` — 파일명 또는 프로젝트 상대 경로를 복사한다.
-- `Location` — `relative/path/File.tsx:line:column`을 복사한다.
+### 5. 클릭 토스트 디자인 ✅ 2026-07-30 완료
 
-결정이 필요한 것:
+복사 성공 feedback을 viewport 하단 중앙의 짧고 명확한 “pop” toast로
+구현했다.
 
-- “모듈명”을 source tag, 파일 stem, import specifier 중 무엇으로 볼지.
-- `File`이 basename인지 프로젝트 상대 경로인지.
-- hash가 아닌 값을 붙여넣었을 때 MCP도 직접 resolve해야 하는지, 아니면
-  AI에게 읽기 쉬운 문자열만 제공할지.
+- Hash와 Context 중 실제 복사한 모드를 확인해 준다.
+- 44px 이상 높이, safe-area inset, 좁은 viewport에서의 최대 너비를
+  적용한다.
+- 작은 translate/scale과 opacity로 등장하고 짧은 overshoot 뒤 정착한
+  다음 부드럽게 퇴장한다.
+- `prefers-reduced-motion`에서는 scale/overshoot 없이 fade만 사용한다.
+- 연속 클릭은 이전 timer와 animation을 취소한 뒤 새 toast를 처음부터
+  안전하게 재생한다.
 
-권장 기본값은 계속 `Locator token`이다. 파일명만 복사하면 같은 이름의
-파일이나 한 파일 안의 반복 요소를 구분할 수 없기 때문이다.
+### 6. 호버 라벨 viewport clipping 방지 ✅ 2026-07-30 완료
 
-### 5. 클릭 토스트 디자인
+현재 요소 라벨이 화면 가장자리에서 잘리지 않도록 viewport-safe 배치를
+구현했다.
 
-현재 기능 토스트를 짧고 명확한 “pop” 모션으로 바꾼다.
-
-- 등장: 작은 scale/translate와 opacity를 조합해 빠르게 튀어나오는 느낌.
-- 짧은 overshoot 후 정착하고, 잠시 유지한 뒤 부드럽게 퇴장한다.
-- 복사 모드와 실제 복사값 일부를 표시한다.
-- FAB·팝오버와 겹치지 않도록 위치를 계산한다.
-- `prefers-reduced-motion`에서는 scale/overshoot를 제거한다.
-- 연속 클릭 시 이전 timer와 animation을 안전하게 재시작한다.
-
-### 6. 호버 라벨 viewport clipping 방지
-
-현재 요소 라벨이 화면 가장자리에서 잘리지 않도록 배치 로직을 보강한다.
-
-- 기본 위치는 현재처럼 요소 위.
-- 상단 공간이 부족하면 요소 아래로 flip.
-- 좌우는 viewport padding 안으로 clamp.
-- 최대 너비와 ellipsis는 유지.
-- 현재 요소에 라벨 하나만 표시하는 원칙은 유지.
-- scroll, resize, 아주 작은 viewport, 긴 경로, 화면 네 모서리를
-  회귀 테스트한다.
-- hit resolver, hash, clipboard, MCP에는 손대지 않는다.
+- 기본 위치는 현재처럼 요소 위다.
+- 위에 들어가지 않고 아래에는 들어가면 아래로 flip한다.
+- 어느 쪽에도 들어가지 않으면 가용 공간이 더 큰 쪽을 선택한 뒤
+  viewport 안으로 clamp한다.
+- 좌우와 상하는 8px viewport padding 안으로 clamp한다.
+- 최대 너비와 ellipsis, 현재 요소에 라벨 하나만 표시하는 원칙을 유지한다.
+- 긴 source tag를 포함한 좌상단·우하단 회귀 테스트로 flip/clamp를
+  검증한다.
+- hit resolver, hash, clipboard payload, MCP는 변경하지 않았다.
 
 ### 7. Locator 비활성화
 
@@ -166,15 +189,17 @@ start`를 분리하는 2단계 모델이 가장 명확하다.
 
 각 항목을 독립적인 RED → GREEN 작업으로 나눈다.
 
-1. 전역 settings schema를 versioning하고 `colorPreset`,
-   `parentLevels`, `copyMode`, `enabledMode` 확장 경로를 만든다.
-2. 라벨 viewport flip/clamp와 toast animation을 각각 독립 작업으로
-   처리한다.
-3. 색상 preset UI와 overlay theme 적용을 구현한다.
-4. `Parent Levels`와 다중 parent box pool을 구현한다.
-5. `Copy As` UI와 clipboard payload를 구현한다.
-6. compact token alias와 MCP backward compatibility를 구현한다.
-7. `Pause`를 먼저 구현하고, true zero-load disable은 integration
+1. ~~package, repository/folder, public branding을 `astro-inspector`
+   기준으로 변경한다.~~ 완료.
+2. 전역 settings schema에 pending `enabledMode` 확장 경로와 lifecycle을
+   설계한다.
+3. ~~라벨 viewport flip/clamp와 toast animation을 각각 독립 작업으로
+   처리한다.~~ 완료.
+4. ~~색상 preset UI와 overlay theme 적용을 구현한다.~~ 완료.
+5. ~~`Parent Levels`와 다중 parent box pool을 구현한다.~~ 완료.
+6. ~~`Copy As` UI와 clipboard payload를 구현한다.~~ 완료.
+7. compact token alias와 MCP backward compatibility를 구현한다.
+8. `Pause`를 먼저 구현하고, true zero-load disable은 integration
    lifecycle을 별도 설계한 뒤 구현한다.
 
 ## 공통 회귀 기준
@@ -209,5 +234,7 @@ start`를 분리하는 2단계 모델이 가장 명확하다.
 2. `src/shared/contracts.ts`, settings endpoint, `src/client/settings-panel.ts`,
    `src/client/overlay.ts`의 현재 책임을 다시 확인한다.
 3. 한 번에 모든 설정을 구현하지 않는다.
-4. 첫 작업은 settings schema versioning 설계 또는 라벨 viewport
-   clipping 회귀 테스트 중 하나로 제한한다.
+4. npm package name 사용 가능 여부를 확인하고 public rename 범위를 먼저
+   확정한다.
+5. 그다음 작업은 compact token alias와 MCP backward compatibility 설계 또는
+   `Pause`/disable lifecycle 설계 중 하나로 제한한다.

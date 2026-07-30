@@ -3,9 +3,9 @@ import {
   SOURCE_LOCATION_ATTRIBUTE,
   SOURCE_TAG_ATTRIBUTE,
   type LocatorClientOptions,
+  type LocatorSettings,
   type RegisterElementRequest,
-  type RegisterElementResponse,
-  type TriggerKey
+  type RegisterElementResponse
 } from "../shared/contracts.js";
 import { createOverlay } from "./overlay.js";
 import {
@@ -20,6 +20,7 @@ import {
   isTriggerKeyEvent,
   isTriggerModifierPressed
 } from "./trigger-key.js";
+import { formatClipboardPayload } from "./clipboard-payload.js";
 
 declare global {
   interface Window {
@@ -183,16 +184,20 @@ async function copyText(text: string): Promise<void> {
 
 function installReadyLocator(
   options: LocatorClientOptions,
-  initialTriggerKey: TriggerKey
+  initialSettings: LocatorSettings
 ): () => void {
-  const overlay = createOverlay(options.showAllBoundaries);
+  const overlay = createOverlay(
+    options.showAllBoundaries,
+    initialSettings.colorPreset,
+    initialSettings.parentLevels
+  );
   if (
     !document.querySelector(SOURCE_SELECTOR) &&
     !window.__astroAiLocatorWarnedMissingMetadata
   ) {
     window.__astroAiLocatorWarnedMissingMetadata = true;
     console.warn(
-      "astro-ai-locator: no Astro source metadata was found on this page"
+      "astro-inspector: no Astro source metadata was found on this page"
     );
   }
 
@@ -200,7 +205,8 @@ function installReadyLocator(
   let pointerTransparentCandidates: Element[] = [];
   let pointerX = 0;
   let pointerY = 0;
-  let triggerKey = initialTriggerKey;
+  let currentSettings = initialSettings;
+  let triggerKey = initialSettings.triggerKey;
   let selectionInProgress = false;
   let settingsPanel: LocatorSettingsPanel;
 
@@ -230,22 +236,46 @@ function installReadyLocator(
   };
 
   settingsPanel = createSettingsPanel({
-    triggerKey,
-    async onTriggerKeyChange(nextTriggerKey) {
+    settings: currentSettings,
+    async onSettingsChange(nextSettings) {
       try {
-        const settings = await saveLocatorSettings(options, nextTriggerKey);
+        const previousSettings = currentSettings;
+        const settings = await saveLocatorSettings(options, nextSettings);
+        currentSettings = settings;
         triggerKey = settings.triggerKey;
-        settingsPanel.setTriggerKey(triggerKey);
-        overlay.toast(`Trigger changed to ${triggerKey}`);
-        setActive(false);
-        return true;
+        settingsPanel.setSettings(settings);
+        const triggerChanged =
+          settings.triggerKey !== previousSettings.triggerKey;
+        const colorChanged =
+          settings.colorPreset !== previousSettings.colorPreset;
+        const parentLevelsChanged =
+          settings.parentLevels !== previousSettings.parentLevels;
+        overlay.setColorPreset(settings.colorPreset);
+        overlay.setParentLevels(settings.parentLevels);
+        if (colorChanged) {
+          overlay.toast(
+            `Overlay color changed to ${settings.colorPreset}`
+          );
+        } else if (parentLevelsChanged) {
+          overlay.toast(
+            `Parent levels changed to ${settings.parentLevels}`
+          );
+        } else {
+          overlay.toast(`Trigger changed to ${settings.triggerKey}`);
+        }
+        if (triggerChanged) {
+          setActive(false);
+        } else if (activeTarget) {
+          overlay.show(activeTarget);
+        }
+        return settings;
       } catch (error) {
         overlay.toast(
           error instanceof Error
             ? error.message
-            : "Unable to update locator trigger"
+            : "Unable to update locator settings"
         );
-        return false;
+        return null;
       }
     }
   });
@@ -346,20 +376,47 @@ function installReadyLocator(
         throw new Error(`Registration failed with HTTP ${response.status}`);
       }
       const result = (await response.json()) as RegisterElementResponse;
-      if (!/^astro_hash_[a-f0-9]{24}$/u.test(result.hash)) {
-        throw new Error("Registration returned an invalid locator hash");
+      if (
+        !/^astro_hash_[a-f0-9]{24}$/u.test(result.hash) ||
+        !result.entry ||
+        typeof result.entry.file !== "string" ||
+        !Number.isInteger(result.entry.line) ||
+        !Number.isInteger(result.entry.column) ||
+        typeof result.entry.sourceTag !== "string" ||
+        typeof result.entry.domTag !== "string" ||
+        typeof result.workspaceFile !== "string" ||
+        !result.workspaceFile.startsWith("/") ||
+        result.workspaceFile.length < 2
+      ) {
+        throw new Error("Registration returned invalid locator data");
       }
       target.setAttribute("data-comp-hash", result.hash);
+      const clipboardPayload = formatClipboardPayload(
+        result,
+        currentSettings
+      );
+      const copyingContext = currentSettings.copyMode === "context";
       try {
-        await copyText(result.hash);
-        overlay.toast(`Copied ${result.hash}`);
+        await copyText(clipboardPayload);
+        overlay.toast(
+          copyingContext ? "Copied context" : `Copied ${result.hash}`
+        );
       } catch {
-        window.prompt("Copy Astro locator hash:", result.hash);
-        overlay.toast("Clipboard was blocked; hash opened for manual copy");
+        window.prompt(
+          copyingContext
+            ? "Copy Astro locator context:"
+            : "Copy Astro locator hash:",
+          clipboardPayload
+        );
+        overlay.toast(
+          `Clipboard was blocked; ${
+            copyingContext ? "context" : "hash"
+          } opened for manual copy`
+        );
       }
     } catch (error) {
       overlay.toast(
-        error instanceof Error ? error.message : "Unable to copy locator hash"
+        error instanceof Error ? error.message : "Unable to copy locator"
       );
     } finally {
       selectionInProgress = false;
@@ -437,7 +494,7 @@ export function installLocator(options: LocatorClientOptions): () => void {
     if (disposed || window.__astroAiLocatorCleanup !== cleanup) {
       return;
     }
-    runtimeCleanup = installReadyLocator(options, settings.triggerKey);
+    runtimeCleanup = installReadyLocator(options, settings);
     document.documentElement.setAttribute(
       "data-astro-ai-locator-ready",
       ""

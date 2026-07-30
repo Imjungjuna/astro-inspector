@@ -1,10 +1,10 @@
 import { constants } from "node:fs";
 import { access, readFile, realpath } from "node:fs/promises";
-import { astroAiLocator } from "astro-ai-locator";
-import { installLocator } from "astro-ai-locator/client";
+import { astroInspector } from "astro-inspector";
+import { installLocator } from "astro-inspector/client";
 
 if (
-  typeof astroAiLocator !== "function" ||
+  typeof astroInspector !== "function" ||
   typeof installLocator !== "function"
 ) {
   throw new Error("Packed root or client export did not resolve");
@@ -12,8 +12,8 @@ if (
 
 const executableName =
   process.platform === "win32"
-    ? "astro-ai-locator-mcp.cmd"
-    : "astro-ai-locator-mcp";
+    ? "astro-inspector-mcp.cmd"
+    : "astro-inspector-mcp";
 const executable = new URL(
   `./node_modules/.bin/${executableName}`,
   import.meta.url

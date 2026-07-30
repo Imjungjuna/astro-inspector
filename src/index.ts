@@ -1,2 +1,6 @@
-export { astroAiLocator } from "./integration/index.js";
-export type { AstroAiLocatorOptions } from "./integration/index.js";
+export {
+  astroInspector,
+  astroAiLocator,
+  type AstroInspectorOptions,
+  type AstroAiLocatorOptions
+} from "./integration/index.js";
