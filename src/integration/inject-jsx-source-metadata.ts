@@ -13,15 +13,6 @@ interface InjectionResult {
   map: SourceMap;
 }
 
-export interface SourcePosition {
-  line: number;
-  column: number;
-}
-
-export type SourcePositionMapper = (
-  position: SourcePosition
-) => SourcePosition | null;
-
 interface OpeningElement {
   type: "JSXOpeningElement";
   start: number;
@@ -118,55 +109,6 @@ function toLineColumn(lineStarts: number[], offset: number) {
   };
 }
 
-function pointsToSourceTag(
-  sourceLines: string[],
-  position: SourcePosition,
-  sourceTag: string
-): boolean {
-  const selectedLine = sourceLines[position.line - 1];
-  if (selectedLine === undefined) {
-    return false;
-  }
-  const sourceAtLocation = selectedLine.slice(position.column - 1);
-  const tagPrefix = `<${sourceTag}`;
-  const tagBoundary = sourceAtLocation[tagPrefix.length];
-  return (
-    sourceAtLocation.startsWith(tagPrefix) &&
-    (tagBoundary === undefined || /[\s/>]/u.test(tagBoundary))
-  );
-}
-
-function originalPositionsByTag(
-  source: string,
-  extension: ".jsx" | ".tsx"
-): Map<string, SourcePosition[]> {
-  let ast: unknown;
-  try {
-    ast = parse(source, {
-      sourceType: "unambiguous",
-      plugins: extension === ".tsx" ? ["jsx", "typescript"] : ["jsx"]
-    });
-  } catch {
-    return new Map();
-  }
-
-  const openings: OpeningElement[] = [];
-  collectOpeningElements(ast, openings);
-  openings.sort((left, right) => left.start - right.start);
-  const lineStarts = createLineStarts(source);
-  const positions = new Map<string, SourcePosition[]>();
-  for (const opening of openings) {
-    const sourceTag = sourceTagName(opening.name);
-    if (!sourceTag) {
-      continue;
-    }
-    const tagPositions = positions.get(sourceTag) ?? [];
-    tagPositions.push(toLineColumn(lineStarts, opening.start));
-    positions.set(sourceTag, tagPositions);
-  }
-  return positions;
-}
-
 function isInside(root: string, file: string): boolean {
   const relative = path.relative(root, file);
   return (
@@ -177,12 +119,15 @@ function isInside(root: string, file: string): boolean {
   );
 }
 
+/**
+ * Runs in `load`, so `source` is always the file on disk. Baking the coordinates
+ * this early keeps the SSR and client pipelines byte-identical: whatever a later
+ * transform does to the code, the attribute values are already fixed.
+ */
 export function injectJsxSourceMetadata(
   source: string,
   file: string,
-  root: string,
-  mapPosition?: SourcePositionMapper,
-  originalSource?: string
+  root: string
 ): InjectionResult | null {
   const absoluteRoot = path.resolve(root);
   const absoluteFile = path.resolve(file);
@@ -212,20 +157,12 @@ export function injectJsxSourceMetadata(
   openings.sort((left, right) => left.start - right.start);
   const lineStarts = createLineStarts(source);
   const output = new MagicString(source);
-  const originalPositions =
-    originalSource === undefined
-      ? new Map<string, SourcePosition[]>()
-      : originalPositionsByTag(originalSource, extension);
-  const originalLines = originalSource?.split(/\r?\n/u);
-  const occurrenceByTag = new Map<string, number>();
 
   for (const opening of openings) {
     const sourceTag = sourceTagName(opening.name);
     if (!sourceTag) {
       continue;
     }
-    const occurrence = occurrenceByTag.get(sourceTag) ?? 0;
-    occurrenceByTag.set(sourceTag, occurrence + 1);
     const existingAttributes = new Set(
       opening.attributes.map(attributeName).filter(Boolean)
     );
@@ -236,23 +173,7 @@ export function injectJsxSourceMetadata(
     if (hasSourceLocation && hasSourceTag) {
       continue;
     }
-    const generatedPosition = toLineColumn(lineStarts, opening.start);
-    const mappedPosition = mapPosition
-      ? mapPosition(generatedPosition)
-      : generatedPosition;
-    // Babel-based plugins sometimes return a map for their intermediate code
-    // instead of composing it with the original file. Never persist that
-    // coordinate unless the expected tag is actually present there.
-    const originalPosition =
-      originalLines === undefined ||
-      (mappedPosition !== null &&
-        pointsToSourceTag(originalLines, mappedPosition, sourceTag))
-        ? mappedPosition
-        : (originalPositions.get(sourceTag)?.[occurrence] ?? null);
-    if (!originalPosition) {
-      continue;
-    }
-    const { line, column } = originalPosition;
+    const { line, column } = toLineColumn(lineStarts, opening.start);
     const attributes = [
       hasSourceLocation
         ? ""

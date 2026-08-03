@@ -866,6 +866,73 @@ test("component call-site metadata reaches its rendered child DOM", async ({
   });
 });
 
+test("a forwarded component resolves to its call site, not its definition", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  await mockSessionEndpoint(page);
+  await page.goto("/");
+
+  const forwarded = page.getByTestId("forwarded-button");
+  await expect(forwarded).toHaveAttribute(
+    "data-astro-ai-locator-file",
+    /index\.astro$/u
+  );
+  await expect(forwarded).toHaveAttribute(
+    "data-astro-ai-locator-source-tag",
+    "ForwardedButton"
+  );
+});
+
+test("locator attributes survive hydration unchanged", async ({
+  page,
+  request
+}) => {
+  await mockSettingsEndpoint(page);
+  await mockSessionEndpoint(page);
+
+  // 1. SSR 이 내려보낸 원본 HTML 에서 값을 읽는다.
+  const html = await (await request.get("/")).text();
+  const ssrMatches = [
+    ...html.matchAll(
+      /data-astro-ai-locator-file="([^"]*ReactIsland\.tsx)"\s+data-astro-ai-locator-loc="(\d+:\d+)"/gu
+    )
+  ].map((match) => `${match[1]}@${match[2]}`);
+  expect(ssrMatches.length).toBeGreaterThan(0);
+
+  // 2. 브라우저가 하이드레이션에 쓰는 client 모듈에서 같은 값을 읽는다.
+  //    하이드레이션은 서버가 보낸 속성을 덮어쓰지 않으므로 DOM 만 봐서는 두 파이프라인의
+  //    불일치가 드러나지 않는다. 실제로 갈라지는 지점은 두 파이프라인이 내보낸 모듈이다.
+  const clientModule = await (
+    await request.get("/src/components/ReactIsland.tsx")
+  ).text();
+  const clientMatches = [
+    ...clientModule.matchAll(
+      /"data-astro-ai-locator-file": "([^"]*ReactIsland\.tsx)",\s*"data-astro-ai-locator-loc": "(\d+:\d+)"/gu
+    )
+  ].map((match) => `${match[1]}@${match[2]}`);
+
+  expect(clientMatches).toEqual(ssrMatches);
+
+  // 3. 하이드레이션 뒤 DOM 도 같은 값을 유지한다.
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-astro-ai-locator-ready",
+    ""
+  );
+  const domMatches = await page.evaluate(() =>
+    [...document.querySelectorAll("[data-astro-ai-locator-file]")]
+      .map((element) => ({
+        file: element.getAttribute("data-astro-ai-locator-file") ?? "",
+        loc: element.getAttribute("data-astro-ai-locator-loc") ?? ""
+      }))
+      .filter((entry) => entry.file.endsWith("ReactIsland.tsx"))
+      .map((entry) => `${entry.file}@${entry.loc}`)
+  );
+
+  expect(domMatches).toEqual(ssrMatches);
+});
+
 test("React island descendants are selectable at their exact JSX source", async ({
   page
 }) => {
