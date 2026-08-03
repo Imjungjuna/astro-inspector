@@ -46,16 +46,22 @@ export function createClientAssetHandler(
       const canonical = await realpath(candidate);
       const relative = path.relative(distRoot, canonical);
       const topLevel = relative.split(path.sep)[0] ?? "";
+      const isSourceMap = canonical.endsWith(".js.map");
       if (
         !isInside(distRoot, canonical) ||
         !SERVABLE_DIRECTORIES.includes(topLevel) ||
-        path.extname(canonical) !== ".js" ||
+        (path.extname(canonical) !== ".js" && !isSourceMap) ||
         !(await stat(canonical)).isFile()
       ) {
         throw new Error("Not a servable locator asset");
       }
       response.statusCode = 200;
-      response.setHeader("content-type", "text/javascript; charset=utf-8");
+      response.setHeader(
+        "content-type",
+        isSourceMap
+          ? "application/json; charset=utf-8"
+          : "text/javascript; charset=utf-8"
+      );
       response.setHeader("cache-control", "no-store");
       response.end(await readFile(canonical, "utf8"));
     } catch {

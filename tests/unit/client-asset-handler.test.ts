@@ -68,6 +68,35 @@ describe("createClientAssetHandler", () => {
     expect(exchange.body()).toContain("export const b = 2;");
   });
 
+  it("serves a client module's source map", async () => {
+    const dist = await createDist();
+    await writeFile(
+      path.join(dist, "client", "index.js.map"),
+      '{"version":3,"sources":["../../src/client/index.ts"]}'
+    );
+    const handler = createClientAssetHandler({ distDirectory: dist });
+    const exchange = createExchange("/client/index.js.map");
+
+    await handler(exchange.request, exchange.response, exchange.next);
+
+    expect(exchange.status()).toBe(200);
+    expect(exchange.headers["content-type"]).toBe(
+      "application/json; charset=utf-8"
+    );
+    expect(exchange.body()).toContain('"version":3');
+  });
+
+  it("refuses non-JS files inside an allowed directory", async () => {
+    const dist = await createDist();
+    await writeFile(path.join(dist, "client", "index.css"), "body { color: red; }");
+    const handler = createClientAssetHandler({ distDirectory: dist });
+    const exchange = createExchange("/client/index.css");
+
+    await handler(exchange.request, exchange.response, exchange.next);
+
+    expect(exchange.status()).toBe(404);
+  });
+
   it("refuses directories outside the client and shared trees", async () => {
     const handler = createClientAssetHandler({ distDirectory: await createDist() });
     const exchange = createExchange("/mcp/cli.js");
