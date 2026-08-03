@@ -1,5 +1,13 @@
 # Quit Extension + Copy MCP Prompt — 설계
 
+> **구현 시 변경 (2026-08-03)**
+>
+> - 우클릭 말풍선과 `src/client/fab-menu.ts`는 만들었다가 제거했다. 진입점은
+>   팝오버 푸터 버튼 하나다. FAB 우클릭은 원래대로 팝오버를 연다.
+> - 푸터 순서는 `Quit Extension` 다음 `Copy MCP Prompt`다.
+> - `Copy MCP Prompt`는 `--locator-solid`로 현재 오버레이 색을 배경에 쓴다.
+> - 아래 본문은 당시 설계 그대로 두고 이 블록으로만 차이를 밝힌다.
+
 > 2026-08-03 작성
 >
 > 팝오버 푸터에 버튼 두 개를 놓고, 여우 FAB 우클릭에 같은 quit 동작을
