@@ -378,13 +378,28 @@ import { createClientAssetHandler } from "./client-asset-handler.js";
         injectScript(
           "head-inline",
           [
-            `import { installLocator } from "${LOCATOR_ASSET_ENDPOINT}/client/index.js";`,
-            `installLocator(${JSON.stringify(clientOptions)});`
+            `import("${LOCATOR_ASSET_ENDPOINT}/client/index.js")`,
+            `  .then(({ installLocator }) => installLocator(${JSON.stringify(clientOptions)}))`,
+            `  .catch((error) => console.error("astro-inspector: client failed to load", error));`
           ].join("\n")
         );
 ```
 
-`head-inline` 은 Vite 가공을 타지 않으므로 bare specifier 를 쓸 수 없다. 위처럼 절대 URL 경로여야 한다. import 목록에 `LOCATOR_ASSET_ENDPOINT` 를 더한다.
+두 가지가 이 형태를 강제한다.
+
+**정적 `import` 를 쓸 수 없다.** Astro 는 `head-inline` 을 `type="module"` **없는 클래식 스크립트**로 렌더한다. 실측한 출력이다.
+
+```html
+<script>import { installLocator } from "/@astro-inspector/client/index.js";
+```
+
+클래식 스크립트에서 정적 `import` 는 SyntaxError 라 payload 가 통째로 실행되지 않는다. **동적 `import()`** 는 클래식 스크립트에서도 legal 하므로 이걸 쓴다. 격리 목표는 그대로다 — 자기 script 태그 안에서 자기 모듈을 URL 로 불러오므로, 남의 깨진 import 가 이걸 막지 못하고 반대도 마찬가지다.
+
+**bare specifier 도 쓸 수 없다.** `head-inline` 은 Vite 가공을 타지 않으므로 절대 URL 경로여야 한다.
+
+`.catch` 는 생략하지 않는다. 없으면 로드 실패가 진단 없는 unhandled rejection 으로 끝난다.
+
+import 목록에 `LOCATOR_ASSET_ENDPOINT` 를 더한다.
 
 - [ ] **Step 9: 실제 dev 서버에서 확인**
 
