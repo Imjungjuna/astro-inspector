@@ -194,7 +194,7 @@ export function createOverlay(
         color: white;
         background: var(--locator-label);
         border-radius: 4px 4px 0 0;
-        font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+        font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
@@ -230,7 +230,7 @@ export function createOverlay(
         display: none;
       }
       .label-tag {
-        font-weight: 700;
+        font-weight: 600;
         opacity: 1;
       }
       .label-file {

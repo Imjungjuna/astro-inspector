@@ -89,7 +89,7 @@ async function mockSessionEndpoint(page: Page) {
   return { isDisabled: () => disabled };
 }
 
-test("right-clicking the fox quits the locator until the dev server restarts", async ({
+test("Quit Extension closes the locator until the dev server restarts", async ({
   page
 }) => {
   await mockSettingsEndpoint(page);
@@ -97,20 +97,11 @@ test("right-clicking the fox quits the locator until the dev server restarts", a
   await page.goto("/");
 
   const launcher = page.locator("[data-astro-ai-locator-launcher]");
-  const fabMenu = page.locator("[data-fab-menu]");
   await expect(launcher).toBeVisible();
-  await expect(fabMenu).toBeHidden();
-
-  await launcher.click({ button: "right" });
-  await expect(fabMenu).toBeVisible();
-
-  // Escape closes the bubble without quitting.
-  await page.keyboard.press("Escape");
-  await expect(fabMenu).toBeHidden();
   expect(session.isDisabled()).toBe(false);
 
-  await launcher.click({ button: "right" });
-  await fabMenu.getByRole("button", { name: "Quit Extension" }).click();
+  await launcher.click();
+  await page.locator("[data-ui-quit]").click();
 
   await expect(page.locator("[data-astro-ai-locator-toast]")).toContainText(
     "Restart the dev server"
@@ -283,7 +274,7 @@ test("Alt hover reveals the page map, annotated parent, current target, and stru
     /^<span>│ReactIsland\.tsx│\d+:\d+$/u
   );
   await expect(label.locator(".label-separator")).toHaveText(["│", "│"]);
-  await expect(label.locator(".label-tag")).toHaveCSS("font-weight", "700");
+  await expect(label.locator(".label-tag")).toHaveCSS("font-weight", "600");
   await expect(label.locator(".label-tag")).toHaveCSS("opacity", "1");
   await expect(label.locator(".label-file")).toHaveCSS("font-weight", "500");
   await expect(label.locator(".label-file")).toHaveCSS("opacity", "0.9");

@@ -210,8 +210,7 @@ export function createSettingsPanel(
         padding: 8px;
         border-top: 1px solid rgba(255, 255, 255, 0.14);
       }
-      .footer-button,
-      .fab-menu-item {
+      .footer-button {
         padding: 0 8px;
         height: 28px;
         border: 1px solid rgba(255, 255, 255, 0.16);
@@ -225,8 +224,7 @@ export function createSettingsPanel(
         line-height: 18px;
         white-space: nowrap;
       }
-      .footer-button:hover,
-      .fab-menu-item:hover {
+      .footer-button:hover {
         background: rgba(255, 255, 255, 0.14);
       }
       /* Tracks the active overlay preset; applyColorPreset re-runs on change. */
@@ -238,28 +236,9 @@ export function createSettingsPanel(
         background: var(--locator-solid);
         filter: brightness(1.12);
       }
-      .footer-button:focus-visible,
-      .fab-menu-item:focus-visible {
+      .footer-button:focus-visible {
         outline: 2px solid #a1a1aa;
         outline-offset: 2px;
-      }
-      .fab-menu {
-        position: absolute;
-        left: 0;
-        bottom: ${LAUNCHER_SIZE + POPOVER_GAP}px;
-        padding: 6px;
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        border-radius: 8px;
-        background: rgba(63, 63, 70, 0.86);
-        -webkit-backdrop-filter: blur(18px);
-        backdrop-filter: blur(18px);
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        font-family: ui-sans-serif, system-ui, -apple-system,
-          BlinkMacSystemFont, "Segoe UI", sans-serif;
-        pointer-events: auto;
-      }
-      .fab-menu[hidden] {
-        display: none;
       }
       .section-heading {
         margin: 0 4px 6px;
@@ -675,11 +654,6 @@ export function createSettingsPanel(
         </button>
       </div>
     </section>
-    <div class="fab-menu" data-fab-menu hidden>
-      <button class="fab-menu-item" type="button" data-ui-quit>
-        Quit Extension
-      </button>
-    </div>
     <button
       class="launcher"
       data-astro-ai-locator-launcher
@@ -1170,22 +1144,13 @@ export function createSettingsPanel(
   launcher.addEventListener("pointerup", finishPointer);
   launcher.addEventListener("pointercancel", finishPointer);
 
-  const fabMenu = shadow.querySelector<HTMLElement>("[data-fab-menu]");
   const copyMcpButton = shadow.querySelector<HTMLButtonElement>(
     "[data-ui-copy-mcp]"
   );
-  const quitButtons = Array.from(
-    shadow.querySelectorAll<HTMLButtonElement>("[data-ui-quit]")
-  );
-  if (!fabMenu || !copyMcpButton || quitButtons.length !== 2) {
+  const quitButton = shadow.querySelector<HTMLButtonElement>("[data-ui-quit]");
+  if (!copyMcpButton || !quitButton) {
     throw new Error("Locator settings panel could not initialize");
   }
-
-  let fabMenuOpen = false;
-  const setFabMenuOpen = (nextOpen: boolean) => {
-    fabMenuOpen = nextOpen;
-    fabMenu.hidden = !nextOpen;
-  };
 
   let copyLabelTimer = 0;
   copyMcpButton.addEventListener("click", () => {
@@ -1201,50 +1166,26 @@ export function createSettingsPanel(
     });
   });
 
-  quitButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      setFabMenuOpen(false);
-      setOpen(false);
-      void options.onQuit();
-    });
+  quitButton.addEventListener("click", () => {
+    setOpen(false);
+    void options.onQuit();
   });
 
   shadow.addEventListener("contextmenu", (event) => {
     event.preventDefault();
     const target = event.target;
-    // Right-clicking the fox opens the quit bubble instead of firing a button.
-    if (
-      target instanceof Node &&
-      (target === launcher || launcher.contains(target))
-    ) {
-      setOpen(false);
-      setFabMenuOpen(!fabMenuOpen);
-      return;
-    }
     if (target instanceof HTMLButtonElement) {
       target.click();
     }
   });
 
   const onOutsidePointerDown = (event: PointerEvent) => {
-    if (event.composedPath().includes(host)) {
-      return;
-    }
-    if (open) {
+    if (open && !event.composedPath().includes(host)) {
       setOpen(false);
     }
-    setFabMenuOpen(false);
   };
   const onEscape = (event: KeyboardEvent) => {
-    if (event.key !== "Escape") {
-      return;
-    }
-    if (fabMenuOpen) {
-      setFabMenuOpen(false);
-      launcher.focus();
-      return;
-    }
-    if (open) {
+    if (open && event.key === "Escape") {
       setOpen(false, true);
     }
   };
