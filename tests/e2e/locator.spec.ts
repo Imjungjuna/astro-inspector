@@ -197,6 +197,55 @@ test("Alt hover reveals the page map, annotated parent, current target, and stru
   await expect(overlay).toBeHidden();
 });
 
+test("hover label marks the source framework with a brand icon", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  await page.goto("/");
+
+  const overlay = page.locator("[data-astro-ai-locator-overlay]");
+  const label = overlay.locator(".label");
+  const icon = label.locator(".label-icon");
+  const astroMark = label.locator(".icon-astro");
+  const reactMark = label.locator(".icon-react");
+
+  await page.getByTestId("card-alpha").hover();
+  await page.keyboard.down("Alt");
+
+  await expect(label).toHaveAttribute("data-framework", "astro");
+  await expect(icon).toBeVisible();
+  await expect(astroMark).toBeVisible();
+  await expect(reactMark).toBeHidden();
+  await expect(astroMark).toHaveCSS("fill", "rgb(188, 82, 238)");
+  await expect(icon).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(icon).toHaveCSS("border-radius", "50%");
+  const iconBounds = await icon.boundingBox();
+  expect(iconBounds?.width).toBeCloseTo(14, 0);
+  expect(iconBounds?.height).toBeCloseTo(14, 0);
+
+  // The same overlay instance has to swap marks, not stack them.
+  await page.getByTestId("react-child-label").hover();
+  await expect(label).toHaveAttribute("data-framework", "react");
+  await expect(reactMark).toBeVisible();
+  await expect(astroMark).toBeHidden();
+  await expect(reactMark).toHaveCSS("fill", "rgb(97, 218, 251)");
+
+  // An untracked extension drops the icon slot instead of leaving a gap.
+  await page
+    .getByTestId("react-child-label")
+    .evaluate((element) =>
+      element.setAttribute("data-astro-ai-locator-file", "src/Card.vue")
+    );
+  await page.getByTestId("card-alpha").hover();
+  await page.getByTestId("react-child-label").hover();
+
+  await expect(label).toHaveText(/Card\.vue/u);
+  await expect(label).not.toHaveAttribute("data-framework", /.*/u);
+  await expect(icon).toBeHidden();
+
+  await page.keyboard.up("Alt");
+});
+
 test("hover label flips and clamps inside the viewport", async ({ page }) => {
   await page.setViewportSize({ width: 240, height: 320 });
   await mockSettingsEndpoint(page);

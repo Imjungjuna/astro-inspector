@@ -101,8 +101,10 @@ Run `astro dev`, then:
 The current target shows a label in the form:
 
 ```
-<SourceTag→DomTag> │ FileName.astro │ line:column
+◆ <SourceTag→DomTag> │ FileName.astro │ line:column
 ```
+
+A brand icon at the far left marks where the element came from: the Astro mark for `.astro` templates, the React mark for `.tsx` and `.jsx`. Both sit on a small light disc so they keep their brand color against every overlay color preset. Any other extension drops the icon slot entirely rather than leaving a gap.
 
 The filename keeps its extension, and the arrow is omitted when the source tag and the rendered DOM tag are identical. The full project-relative path is preserved in the DOM metadata, the manifest, and the MCP response. Labels prefer to sit above the target. They use the space below when the label does not fit above but does fit below; if neither side fits, they choose the side with more available space. The result is then clamped to an 8px viewport inset on every edge. The 640px maximum width and ellipsis keep long source names readable without overflowing the screen.
 
@@ -222,6 +224,8 @@ The result: visible overlays remain selectable, stretched pseudo-elements do not
 ### Hash stability
 
 Repeated renders of the same `.astro` tag share one hash across all DOM instances. When the file changes through HMR — or is deleted — its existing hashes are invalidated.
+
+The manifest holds at most 100 entries. Once a selection pushes it past that, the 50 least recently registered entries are dropped, and their hashes stop resolving. Re-selecting an element moves it back to the newest end, so a hash you are actively working with is not evicted out from under you.
 
 ---
 
