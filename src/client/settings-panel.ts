@@ -26,6 +26,7 @@ const VIEWPORT_GAP = 12;
 const DEFAULT_EDGE_GAP = 16;
 const LAUNCHER_SIZE = 46;
 const POPOVER_GAP = 6;
+const COPY_FEEDBACK_MS = 1800;
 const DRAG_THRESHOLD = 5;
 
 interface LauncherPosition {
@@ -38,6 +39,8 @@ interface SettingsPanelOptions {
   onSettingsChange(
     settings: LocatorSettings
   ): Promise<LocatorSettings | null>;
+  onCopyMcpPrompt(): Promise<boolean>;
+  onQuit(): Promise<void>;
 }
 
 export interface LocatorSettingsPanel {
@@ -199,6 +202,55 @@ export function createSettingsPanel(
       .copy-section,
       .preferences-section {
         padding: 8px;
+      }
+      .footer {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        padding: 8px;
+        border-top: 1px solid rgba(255, 255, 255, 0.14);
+      }
+      .footer-button,
+      .fab-menu-item {
+        padding: 0 8px;
+        height: 28px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.06);
+        color: #f4f4f5;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 18px;
+        white-space: nowrap;
+      }
+      .footer-button:hover,
+      .fab-menu-item:hover {
+        background: rgba(255, 255, 255, 0.14);
+      }
+      .footer-button:focus-visible,
+      .fab-menu-item:focus-visible {
+        outline: 2px solid #a1a1aa;
+        outline-offset: 2px;
+      }
+      .fab-menu {
+        position: absolute;
+        left: 0;
+        bottom: ${LAUNCHER_SIZE + POPOVER_GAP}px;
+        padding: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 8px;
+        background: rgba(63, 63, 70, 0.86);
+        -webkit-backdrop-filter: blur(18px);
+        backdrop-filter: blur(18px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        font-family: ui-sans-serif, system-ui, -apple-system,
+          BlinkMacSystemFont, "Segoe UI", sans-serif;
+        pointer-events: auto;
+      }
+      .fab-menu[hidden] {
+        display: none;
       }
       .section-heading {
         margin: 0 4px 6px;
@@ -605,7 +657,20 @@ export function createSettingsPanel(
           </span>
         </div>
       </div>
+      <div class="footer">
+        <button class="footer-button" type="button" data-ui-copy-mcp>
+          Copy MCP Prompt
+        </button>
+        <button class="footer-button" type="button" data-ui-quit>
+          Quit Extension
+        </button>
+      </div>
     </section>
+    <div class="fab-menu" data-fab-menu hidden>
+      <button class="fab-menu-item" type="button" data-ui-quit>
+        Quit Extension
+      </button>
+    </div>
     <button
       class="launcher"
       data-astro-ai-locator-launcher
@@ -1096,21 +1161,81 @@ export function createSettingsPanel(
   launcher.addEventListener("pointerup", finishPointer);
   launcher.addEventListener("pointercancel", finishPointer);
 
+  const fabMenu = shadow.querySelector<HTMLElement>("[data-fab-menu]");
+  const copyMcpButton = shadow.querySelector<HTMLButtonElement>(
+    "[data-ui-copy-mcp]"
+  );
+  const quitButtons = Array.from(
+    shadow.querySelectorAll<HTMLButtonElement>("[data-ui-quit]")
+  );
+  if (!fabMenu || !copyMcpButton || quitButtons.length !== 2) {
+    throw new Error("Locator settings panel could not initialize");
+  }
+
+  let fabMenuOpen = false;
+  const setFabMenuOpen = (nextOpen: boolean) => {
+    fabMenuOpen = nextOpen;
+    fabMenu.hidden = !nextOpen;
+  };
+
+  let copyLabelTimer = 0;
+  copyMcpButton.addEventListener("click", () => {
+    void options.onCopyMcpPrompt().then((copied) => {
+      if (!copied) {
+        return;
+      }
+      window.clearTimeout(copyLabelTimer);
+      copyMcpButton.textContent = "Copied ✓";
+      copyLabelTimer = window.setTimeout(() => {
+        copyMcpButton.textContent = "Copy MCP Prompt";
+      }, COPY_FEEDBACK_MS);
+    });
+  });
+
+  quitButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      setFabMenuOpen(false);
+      setOpen(false);
+      void options.onQuit();
+    });
+  });
+
   shadow.addEventListener("contextmenu", (event) => {
     event.preventDefault();
     const target = event.target;
+    // Right-clicking the fox opens the quit bubble instead of firing a button.
+    if (
+      target instanceof Node &&
+      (target === launcher || launcher.contains(target))
+    ) {
+      setOpen(false);
+      setFabMenuOpen(!fabMenuOpen);
+      return;
+    }
     if (target instanceof HTMLButtonElement) {
       target.click();
     }
   });
 
   const onOutsidePointerDown = (event: PointerEvent) => {
-    if (open && !event.composedPath().includes(host)) {
+    if (event.composedPath().includes(host)) {
+      return;
+    }
+    if (open) {
       setOpen(false);
     }
+    setFabMenuOpen(false);
   };
   const onEscape = (event: KeyboardEvent) => {
-    if (open && event.key === "Escape") {
+    if (event.key !== "Escape") {
+      return;
+    }
+    if (fabMenuOpen) {
+      setFabMenuOpen(false);
+      launcher.focus();
+      return;
+    }
+    if (open) {
       setOpen(false, true);
     }
   };
@@ -1139,6 +1264,7 @@ export function createSettingsPanel(
       updateSelectedSettings();
     },
     destroy() {
+      window.clearTimeout(copyLabelTimer);
       document.removeEventListener(
         "pointerdown",
         onOutsidePointerDown,

@@ -66,6 +66,113 @@ async function mockSettingsEndpoint(
   };
 }
 
+/**
+ * The whole suite shares one fixture dev server, and the real quit flag is per
+ * process. Posting it for real would kill the locator for every later test, so
+ * the session endpoint is always mocked here.
+ */
+async function mockSessionEndpoint(page: Page) {
+  let disabled = false;
+  await page.route("**/_astro-ai-locator/session", async (route) => {
+    if (route.request().method() === "POST") {
+      disabled = true;
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        disabled,
+        mcpCommand: "/fixture/node_modules/.bin/astro-inspector-mcp",
+        mcpArgs: ["--project-root", "/fixture"]
+      })
+    });
+  });
+  return { isDisabled: () => disabled };
+}
+
+test("right-clicking the fox quits the locator until the dev server restarts", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  const session = await mockSessionEndpoint(page);
+  await page.goto("/");
+
+  const launcher = page.locator("[data-astro-ai-locator-launcher]");
+  const fabMenu = page.locator("[data-fab-menu]");
+  await expect(launcher).toBeVisible();
+  await expect(fabMenu).toBeHidden();
+
+  await launcher.click({ button: "right" });
+  await expect(fabMenu).toBeVisible();
+
+  // Escape closes the bubble without quitting.
+  await page.keyboard.press("Escape");
+  await expect(fabMenu).toBeHidden();
+  expect(session.isDisabled()).toBe(false);
+
+  await launcher.click({ button: "right" });
+  await fabMenu.getByRole("button", { name: "Quit Extension" }).click();
+
+  await expect(page.locator("[data-astro-ai-locator-toast]")).toContainText(
+    "Restart the dev server"
+  );
+  await expect(launcher).toHaveCount(0);
+  await expect(page.locator("html")).not.toHaveAttribute(
+    "data-astro-ai-locator-ready",
+    ""
+  );
+  expect(session.isDisabled()).toBe(true);
+
+  // The trigger key must be inert now that every listener is gone.
+  await page.getByTestId("card-alpha").hover();
+  await page.keyboard.down("Alt");
+  await expect(page.locator("[data-astro-ai-locator-overlay]")).toHaveCount(0);
+  await page.keyboard.up("Alt");
+
+  // A reload keeps it closed because the dev server process holds the flag.
+  await page.reload();
+  await expect(page.locator("[data-astro-ai-locator-launcher]")).toHaveCount(0);
+  await expect(
+    page.locator("[data-astro-ai-locator-overlay]")
+  ).toHaveCount(0);
+});
+
+test("Copy MCP Prompt puts an agent-ready setup message on the clipboard", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  await mockSessionEndpoint(page);
+  await page.goto("/");
+  await page.evaluate(() => navigator.clipboard.writeText(""));
+
+  await page.locator("[data-astro-ai-locator-launcher]").click();
+  // Located by attribute, not accessible name: the label itself is asserted
+  // below and a name-based locator would stop matching when it flips.
+  const copyButton = page.locator("[data-ui-copy-mcp]");
+  await expect(copyButton).toHaveText("Copy MCP Prompt");
+  await copyButton.click();
+
+  // The label reverts after 1.8s, so check it before reading the clipboard.
+  await expect(copyButton).toHaveText("Copied ✓");
+
+  const copied = await page.evaluate(() =>
+    navigator.clipboard.readText()
+  );
+
+  expect(copied).toContain("get_astro_element_by_hash");
+  expect(copied).toContain(".cursor/mcp.json");
+  const json = copied.slice(copied.indexOf("{"), copied.lastIndexOf("}") + 1);
+  expect(JSON.parse(json)).toEqual({
+    mcpServers: {
+      "astro-inspector": {
+        command: "/fixture/node_modules/.bin/astro-inspector-mcp",
+        args: ["--project-root", "/fixture"]
+      }
+    }
+  });
+
+  await expect(copyButton).toHaveText("Copy MCP Prompt");
+});
+
 test("Alt hover reveals the page map, annotated parent, current target, and structured label", async ({
   page
 }) => {

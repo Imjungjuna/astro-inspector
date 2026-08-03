@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import type { AstroIntegration } from "astro";
 import {
   LOCATOR_ENDPOINT,
+  LOCATOR_SESSION_ENDPOINT,
   LOCATOR_SETTINGS_ENDPOINT
 } from "../shared/contracts.js";
 import { createLocatorVitePlugin } from "./vite-plugin.js";
@@ -32,6 +33,7 @@ export function astroInspector(
         const clientOptions = {
           endpoint: LOCATOR_ENDPOINT,
           settingsEndpoint: LOCATOR_SETTINGS_ENDPOINT,
+          sessionEndpoint: LOCATOR_SESSION_ENDPOINT,
           sessionToken,
           showAllBoundaries: options.showAllBoundaries ?? true
         };
