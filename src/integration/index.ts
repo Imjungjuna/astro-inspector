@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import type { AstroIntegration } from "astro";
 import {
+  LOCATOR_ASSET_ENDPOINT,
   LOCATOR_ENDPOINT,
   LOCATOR_SESSION_ENDPOINT,
   LOCATOR_SETTINGS_ENDPOINT
@@ -50,10 +51,11 @@ export function astroInspector(
         });
 
         injectScript(
-          "page",
+          "head-inline",
           [
-            'import { installLocator } from "astro-inspector/client";',
-            `installLocator(${JSON.stringify(clientOptions)});`
+            `import("${LOCATOR_ASSET_ENDPOINT}/client/index.js")`,
+            `  .then(({ installLocator }) => installLocator(${JSON.stringify(clientOptions)}))`,
+            `  .catch((error) => console.error("astro-inspector: client failed to load", error));`
           ].join("\n")
         );
       }

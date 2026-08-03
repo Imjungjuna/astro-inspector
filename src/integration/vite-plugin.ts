@@ -1,6 +1,7 @@
 import { realpathSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   TraceMap,
   originalPositionFor,
@@ -14,11 +15,13 @@ import {
 import { ManifestStore } from "../manifest/store.js";
 import { LocatorSettingsStore } from "../settings/store.js";
 import {
+  LOCATOR_ASSET_ENDPOINT,
   LOCATOR_ENDPOINT,
   LOCATOR_SESSION_ENDPOINT,
   LOCATOR_SETTINGS_ENDPOINT,
   MANIFEST_DIRECTORY
 } from "../shared/contracts.js";
+import { createClientAssetHandler } from "./client-asset-handler.js";
 import { injectAstroSourceMetadata } from "./inject-source-metadata.js";
 import {
   injectJsxSourceMetadata,
@@ -155,6 +158,9 @@ export function createLocatorVitePlugin(
     ...resolveMcpCommand(configuredRoot, workspaceRoot),
     sessionToken: options.sessionToken
   });
+  // dist/integration/vite-plugin.js 기준 한 단계 위가 dist 루트다.
+  const distDirectory = fileURLToPath(new URL("..", import.meta.url));
+  const clientAssetHandler = createClientAssetHandler({ distDirectory });
   const toRelativeProjectFile = (file: string) => {
     const absoluteFile = path.resolve(file);
     for (const base of [configuredRoot, root]) {
@@ -230,6 +236,12 @@ export function createLocatorVitePlugin(
         LOCATOR_SESSION_ENDPOINT,
         (request, response, next) => {
           void sessionHandler(request, response, next).catch(next);
+        }
+      );
+      server.middlewares.use(
+        LOCATOR_ASSET_ENDPOINT,
+        (request, response, next) => {
+          void clientAssetHandler(request, response, next).catch(next);
         }
       );
 

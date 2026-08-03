@@ -238,7 +238,8 @@ describe("createLocatorVitePlugin", () => {
     expect(mountedPaths).toEqual([
       "/@astro-inspector/register",
       "/@astro-inspector/settings",
-      "/@astro-inspector/session"
+      "/@astro-inspector/session",
+      "/@astro-inspector"
     ]);
   });
 

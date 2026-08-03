@@ -43,10 +43,13 @@ describe("astroInspector", () => {
       }
     });
     expect(injectScript).toHaveBeenCalledWith(
-      "page",
+      "head-inline",
       expect.stringContaining(
-        'import { installLocator } from "astro-inspector/client";'
+        'import("/@astro-inspector/client/index.js")'
       )
+    );
+    expect(injectScript.mock.calls[0]?.[1]).not.toContain(
+      "import { installLocator } from"
     );
     expect(injectScript.mock.calls[0]?.[1]).toContain(
       '"showAllBoundaries":false'
