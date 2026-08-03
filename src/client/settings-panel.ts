@@ -229,6 +229,15 @@ export function createSettingsPanel(
       .fab-menu-item:hover {
         background: rgba(255, 255, 255, 0.14);
       }
+      /* Tracks the active overlay preset; applyColorPreset re-runs on change. */
+      .footer-button[data-ui-copy-mcp] {
+        border-color: transparent;
+        background: var(--locator-solid);
+      }
+      .footer-button[data-ui-copy-mcp]:hover {
+        background: var(--locator-solid);
+        filter: brightness(1.12);
+      }
       .footer-button:focus-visible,
       .fab-menu-item:focus-visible {
         outline: 2px solid #a1a1aa;
@@ -658,11 +667,11 @@ export function createSettingsPanel(
         </div>
       </div>
       <div class="footer">
-        <button class="footer-button" type="button" data-ui-copy-mcp>
-          Copy MCP Prompt
-        </button>
         <button class="footer-button" type="button" data-ui-quit>
           Quit Extension
+        </button>
+        <button class="footer-button" type="button" data-ui-copy-mcp>
+          Copy MCP Prompt
         </button>
       </div>
     </section>

@@ -149,6 +149,14 @@ test("Copy MCP Prompt puts an agent-ready setup message on the clipboard", async
   // below and a name-based locator would stop matching when it flips.
   const copyButton = page.locator("[data-ui-copy-mcp]");
   await expect(copyButton).toHaveText("Copy MCP Prompt");
+
+  // Quit sits left of Copy, and Copy carries the active overlay color.
+  await expect(page.locator(".footer .footer-button")).toHaveText([
+    "Quit Extension",
+    "Copy MCP Prompt"
+  ]);
+  await expect(copyButton).toHaveCSS("background-color", "rgb(124, 58, 237)");
+
   await copyButton.click();
 
   // The label reverts after 1.8s, so check it before reading the clipboard.
