@@ -251,6 +251,7 @@ Full file contents are **never** included in the MCP response. The connected CLI
 
 In dev mode the Astro integration installs a Vite plugin and a small browser client.
 
+0. **Serve.** The integration serves its own browser client from `/@astro-inspector/client/` and injects a single `head-inline` script tag pointing at it. It never shares a module with other integrations' page scripts, so a failing import elsewhere on the page cannot stop the locator from installing.
 1. **Inject.** Before Astro/React compilation, the plugin adds source-location attributes to `.astro`, `.tsx`, and `.jsx` tags inside the project root. These `data-*` attributes survive into the real DOM, including after React islands hydrate.
 2. **Select.** The browser posts the chosen location to an authenticated local dev endpoint.
 3. **Hash.** The server derives a deterministic hash and records it in a manifest.
@@ -324,6 +325,8 @@ Additional constraints:
 **Dev endpoints** require a token that is regenerated for every process. The session endpoint reports whether the locator was closed and returns the MCP command for this project; it is the one place an absolute path reaches the browser, and it is never stored in the DOM, manifest, MCP result, or settings. Dev endpoints live under `/@astro-inspector/`. The `/@` prefix is what Vite reserves for its own internal requests, so proxies that already forward Vite traffic by path reach them without extra configuration. The element-registration endpoint caps the request body and the source file size, and accepts only real `.astro` / `.tsx` / `.jsx` files inside the project root at valid line and column positions. The workspace-relative path used by Context copy is derived from Vite's detected workspace root only after that validation; it is returned to the authenticated browser for the current click and is not stored in the DOM, manifest, MCP result, or settings. The settings endpoint validates allowlisted trigger keys, color presets, parent levels, copy modes, context fields, Location/Line dependencies, and Location formats before an atomic write.
 
 **The MCP server** normalizes both manifest and source paths with `realpath`, blocking path traversal and symlink escapes. On stdio, `stdout` carries the MCP protocol only — all diagnostics go to `stderr`.
+
+**The asset endpoint** (`/@astro-inspector/client/…`) carries no token — a `<script src>` cannot send headers — so it serves only the browser-facing `dist/client/**` and `dist/shared/**` trees and nothing else in the package.
 
 ---
 
