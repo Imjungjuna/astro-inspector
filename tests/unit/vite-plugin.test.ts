@@ -236,9 +236,9 @@ describe("createLocatorVitePlugin", () => {
     } as never);
 
     expect(mountedPaths).toEqual([
-      LOCATOR_ENDPOINT,
-      LOCATOR_SETTINGS_ENDPOINT,
-      LOCATOR_SESSION_ENDPOINT
+      "/@astro-inspector/register",
+      "/@astro-inspector/settings",
+      "/@astro-inspector/session"
     ]);
   });
 

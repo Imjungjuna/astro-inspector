@@ -52,7 +52,7 @@ describe("astroInspector", () => {
       '"showAllBoundaries":false'
     );
     expect(injectScript.mock.calls[0]?.[1]).toContain(
-      '"/_astro-ai-locator/settings"'
+      '"/@astro-inspector/settings"'
     );
     expect(injectScript.mock.calls[0]?.[1]).not.toContain(
       "serverInstanceId"

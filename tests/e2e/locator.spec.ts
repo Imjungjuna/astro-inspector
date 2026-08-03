@@ -36,7 +36,7 @@ async function mockSettingsEndpoint(
     ...initialCopySettings
   };
   let rejectNextWrite = false;
-  await page.route("**/_astro-ai-locator/settings", async (route) => {
+  await page.route("**/@astro-inspector/settings", async (route) => {
     const request = route.request();
     if (request.method() === "PUT" && rejectNextWrite) {
       rejectNextWrite = false;
@@ -73,7 +73,7 @@ async function mockSettingsEndpoint(
  */
 async function mockSessionEndpoint(page: Page) {
   let disabled = false;
-  await page.route("**/_astro-ai-locator/session", async (route) => {
+  await page.route("**/@astro-inspector/session", async (route) => {
     if (route.request().method() === "POST") {
       disabled = true;
     }
@@ -806,7 +806,7 @@ test("Copy As does not copy when registration fails", async ({ page }) => {
     contextFields: ["tag"],
     locationFormat: "path"
   });
-  await page.route("**/_astro-ai-locator/register", async (route) => {
+  await page.route("**/@astro-inspector/register", async (route) => {
     await route.fulfill({
       status: 500,
       contentType: "application/json",
