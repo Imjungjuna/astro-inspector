@@ -3,6 +3,7 @@ import {
   SOURCE_LOCATION_ATTRIBUTE,
   SOURCE_TAG_ATTRIBUTE,
   type LocatorClientOptions,
+  type LocatorSessionState,
   type LocatorSettings,
   type RegisterElementRequest,
   type RegisterElementResponse
@@ -21,6 +22,8 @@ import {
   isTriggerModifierPressed
 } from "./trigger-key.js";
 import { formatClipboardPayload } from "./clipboard-payload.js";
+import { formatMcpSetupPrompt } from "./mcp-prompt.js";
+import { loadSessionState, quitLocatorSession } from "./session-api.js";
 
 declare global {
   interface Window {
@@ -247,9 +250,13 @@ async function copyText(text: string): Promise<void> {
   }
 }
 
+const QUIT_FAREWELL_MS = 1800;
+
 function installReadyLocator(
   options: LocatorClientOptions,
-  initialSettings: LocatorSettings
+  initialSettings: LocatorSettings,
+  sessionState: LocatorSessionState | null,
+  requestCleanup: () => void
 ): () => void {
   const overlay = createOverlay(
     options.showAllBoundaries,
@@ -300,8 +307,44 @@ function installReadyLocator(
     overlay.hide();
   };
 
+  let quitting = false;
+  const quitExtension = async () => {
+    if (quitting) {
+      return;
+    }
+    quitting = true;
+    let farewell =
+      "Locator closed. Restart the dev server to bring it back.";
+    try {
+      await quitLocatorSession(options);
+    } catch {
+      farewell = "Locator closed here only. Reload the page to bring it back.";
+    }
+    overlay.toast(farewell);
+    // Let the toast finish before the overlay that renders it is destroyed.
+    window.setTimeout(requestCleanup, QUIT_FAREWELL_MS);
+  };
+
+  const copyMcpPrompt = async () => {
+    if (!sessionState) {
+      overlay.toast("Unable to read MCP configuration");
+      return false;
+    }
+    const prompt = formatMcpSetupPrompt(sessionState);
+    try {
+      await copyText(prompt);
+      return true;
+    } catch {
+      window.prompt("Copy the astro-inspector MCP setup prompt:", prompt);
+      overlay.toast("Clipboard was blocked; prompt opened for manual copy");
+      return false;
+    }
+  };
+
   settingsPanel = createSettingsPanel({
     settings: currentSettings,
+    onCopyMcpPrompt: copyMcpPrompt,
+    onQuit: quitExtension,
     async onSettingsChange(nextSettings) {
       try {
         const previousSettings = currentSettings;
@@ -547,11 +590,24 @@ export function installLocator(options: LocatorClientOptions): () => void {
   };
   window.__astroAiLocatorCleanup = cleanup;
 
-  void loadLocatorSettings(options).then((settings) => {
+  void Promise.all([
+    loadLocatorSettings(options),
+    loadSessionState(options)
+  ]).then(([settings, sessionState]) => {
     if (disposed || window.__astroAiLocatorCleanup !== cleanup) {
       return;
     }
-    runtimeCleanup = installReadyLocator(options, settings);
+    // Quit Extension is per dev server process, so a reload keeps it closed.
+    if (sessionState?.disabled) {
+      cleanup();
+      return;
+    }
+    runtimeCleanup = installReadyLocator(
+      options,
+      settings,
+      sessionState,
+      cleanup
+    );
     document.documentElement.setAttribute(
       "data-astro-ai-locator-ready",
       ""

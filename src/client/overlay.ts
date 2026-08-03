@@ -6,6 +6,10 @@ import {
   type ParentLevels
 } from "../shared/contracts.js";
 import { applyColorPreset } from "./color-presets.js";
+import {
+  FRAMEWORK_ICON_SVG,
+  frameworkFromFile
+} from "./source-framework.js";
 
 const INSPECTION_STYLE = `
 html[data-astro-ai-locator-active] [${SOURCE_FILE_ATTRIBUTE}][${SOURCE_LOCATION_ATTRIBUTE}]::before,
@@ -190,12 +194,43 @@ export function createOverlay(
         color: white;
         background: var(--locator-label);
         border-radius: 4px 4px 0 0;
-        font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+        font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      .label-icon {
+        display: none;
+        box-sizing: border-box;
+        width: 14px;
+        height: 14px;
+        margin-block: -2px;
+        margin-inline-end: 5px;
+        border-radius: 50%;
+        background: #ffffff;
+        vertical-align: middle;
+      }
+      .label[data-framework] .label-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .label-icon svg {
+        display: block;
+        width: 10px;
+        height: 10px;
+      }
+      .icon-astro {
+        fill: #bc52ee;
+      }
+      .icon-react {
+        fill: #61dafb;
+      }
+      .label:not([data-framework="astro"]) .icon-astro,
+      .label:not([data-framework="react"]) .icon-react {
+        display: none;
+      }
       .label-tag {
-        font-weight: 700;
+        font-weight: 600;
         opacity: 1;
       }
       .label-file {
@@ -216,7 +251,7 @@ export function createOverlay(
     <div class="parent-box" data-parent-level="2"></div>
     <div class="parent-box" data-parent-level="3"></div>
     <div class="box"></div>
-    <span class="label"><span class="label-tag"></span><span class="label-separator" aria-hidden="true">│</span><span class="label-file"></span><span class="label-separator" aria-hidden="true">│</span><span class="label-location"></span></span>
+    <span class="label"><span class="label-icon">${FRAMEWORK_ICON_SVG.astro}${FRAMEWORK_ICON_SVG.react}</span><span class="label-tag"></span><span class="label-separator" aria-hidden="true">│</span><span class="label-file"></span><span class="label-separator" aria-hidden="true">│</span><span class="label-location"></span></span>
   `;
   applyColorPreset(host, colorPreset);
   document.documentElement.append(host);
@@ -274,6 +309,13 @@ export function createOverlay(
         }
       });
       positionBox(box, rect);
+      const framework = frameworkFromFile(file);
+      if (framework) {
+        label.dataset.framework = framework;
+      } else {
+        // An empty string still matches `[data-framework]`, so remove it.
+        delete label.dataset.framework;
+      }
       labelTag.textContent = `<${tagLabel}>`;
       labelFile.textContent = fileName;
       labelLocation.textContent = location;

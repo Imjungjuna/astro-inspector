@@ -66,6 +66,112 @@ async function mockSettingsEndpoint(
   };
 }
 
+/**
+ * The whole suite shares one fixture dev server, and the real quit flag is per
+ * process. Posting it for real would kill the locator for every later test, so
+ * the session endpoint is always mocked here.
+ */
+async function mockSessionEndpoint(page: Page) {
+  let disabled = false;
+  await page.route("**/_astro-ai-locator/session", async (route) => {
+    if (route.request().method() === "POST") {
+      disabled = true;
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        disabled,
+        mcpCommand: "/fixture/node_modules/.bin/astro-inspector-mcp",
+        mcpArgs: ["--project-root", "/fixture"]
+      })
+    });
+  });
+  return { isDisabled: () => disabled };
+}
+
+test("Quit Extension closes the locator until the dev server restarts", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  const session = await mockSessionEndpoint(page);
+  await page.goto("/");
+
+  const launcher = page.locator("[data-astro-ai-locator-launcher]");
+  await expect(launcher).toBeVisible();
+  expect(session.isDisabled()).toBe(false);
+
+  await launcher.click();
+  await page.locator("[data-ui-quit]").click();
+
+  await expect(page.locator("[data-astro-ai-locator-toast]")).toContainText(
+    "Restart the dev server"
+  );
+  await expect(launcher).toHaveCount(0);
+  await expect(page.locator("html")).not.toHaveAttribute(
+    "data-astro-ai-locator-ready",
+    ""
+  );
+  expect(session.isDisabled()).toBe(true);
+
+  // The trigger key must be inert now that every listener is gone.
+  await page.getByTestId("card-alpha").hover();
+  await page.keyboard.down("Alt");
+  await expect(page.locator("[data-astro-ai-locator-overlay]")).toHaveCount(0);
+  await page.keyboard.up("Alt");
+
+  // A reload keeps it closed because the dev server process holds the flag.
+  await page.reload();
+  await expect(page.locator("[data-astro-ai-locator-launcher]")).toHaveCount(0);
+  await expect(
+    page.locator("[data-astro-ai-locator-overlay]")
+  ).toHaveCount(0);
+});
+
+test("Copy MCP Prompt puts an agent-ready setup message on the clipboard", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  await mockSessionEndpoint(page);
+  await page.goto("/");
+  await page.evaluate(() => navigator.clipboard.writeText(""));
+
+  await page.locator("[data-astro-ai-locator-launcher]").click();
+  // Located by attribute, not accessible name: the label itself is asserted
+  // below and a name-based locator would stop matching when it flips.
+  const copyButton = page.locator("[data-ui-copy-mcp]");
+  await expect(copyButton).toHaveText("Copy MCP Prompt");
+
+  // Quit sits left of Copy, and Copy carries the active overlay color.
+  await expect(page.locator(".footer .footer-button")).toHaveText([
+    "Quit Extension",
+    "Copy MCP Prompt"
+  ]);
+  await expect(copyButton).toHaveCSS("background-color", "rgb(124, 58, 237)");
+
+  await copyButton.click();
+
+  // The label reverts after 1.8s, so check it before reading the clipboard.
+  await expect(copyButton).toHaveText("Copied ✓");
+
+  const copied = await page.evaluate(() =>
+    navigator.clipboard.readText()
+  );
+
+  expect(copied).toContain("get_astro_element_by_hash");
+  expect(copied).toContain(".cursor/mcp.json");
+  const json = copied.slice(copied.indexOf("{"), copied.lastIndexOf("}") + 1);
+  expect(JSON.parse(json)).toEqual({
+    mcpServers: {
+      "astro-inspector": {
+        command: "/fixture/node_modules/.bin/astro-inspector-mcp",
+        args: ["--project-root", "/fixture"]
+      }
+    }
+  });
+
+  await expect(copyButton).toHaveText("Copy MCP Prompt");
+});
+
 test("Alt hover reveals the page map, annotated parent, current target, and structured label", async ({
   page
 }) => {
@@ -168,7 +274,7 @@ test("Alt hover reveals the page map, annotated parent, current target, and stru
     /^<span>│ReactIsland\.tsx│\d+:\d+$/u
   );
   await expect(label.locator(".label-separator")).toHaveText(["│", "│"]);
-  await expect(label.locator(".label-tag")).toHaveCSS("font-weight", "700");
+  await expect(label.locator(".label-tag")).toHaveCSS("font-weight", "600");
   await expect(label.locator(".label-tag")).toHaveCSS("opacity", "1");
   await expect(label.locator(".label-file")).toHaveCSS("font-weight", "500");
   await expect(label.locator(".label-file")).toHaveCSS("opacity", "0.9");
@@ -195,6 +301,55 @@ test("Alt hover reveals the page map, annotated parent, current target, and stru
 
   await page.keyboard.up("Alt");
   await expect(overlay).toBeHidden();
+});
+
+test("hover label marks the source framework with a brand icon", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  await page.goto("/");
+
+  const overlay = page.locator("[data-astro-ai-locator-overlay]");
+  const label = overlay.locator(".label");
+  const icon = label.locator(".label-icon");
+  const astroMark = label.locator(".icon-astro");
+  const reactMark = label.locator(".icon-react");
+
+  await page.getByTestId("card-alpha").hover();
+  await page.keyboard.down("Alt");
+
+  await expect(label).toHaveAttribute("data-framework", "astro");
+  await expect(icon).toBeVisible();
+  await expect(astroMark).toBeVisible();
+  await expect(reactMark).toBeHidden();
+  await expect(astroMark).toHaveCSS("fill", "rgb(188, 82, 238)");
+  await expect(icon).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(icon).toHaveCSS("border-radius", "50%");
+  const iconBounds = await icon.boundingBox();
+  expect(iconBounds?.width).toBeCloseTo(14, 0);
+  expect(iconBounds?.height).toBeCloseTo(14, 0);
+
+  // The same overlay instance has to swap marks, not stack them.
+  await page.getByTestId("react-child-label").hover();
+  await expect(label).toHaveAttribute("data-framework", "react");
+  await expect(reactMark).toBeVisible();
+  await expect(astroMark).toBeHidden();
+  await expect(reactMark).toHaveCSS("fill", "rgb(97, 218, 251)");
+
+  // An untracked extension drops the icon slot instead of leaving a gap.
+  await page
+    .getByTestId("react-child-label")
+    .evaluate((element) =>
+      element.setAttribute("data-astro-ai-locator-file", "src/Card.vue")
+    );
+  await page.getByTestId("card-alpha").hover();
+  await page.getByTestId("react-child-label").hover();
+
+  await expect(label).toHaveText(/Card\.vue/u);
+  await expect(label).not.toHaveAttribute("data-framework", /.*/u);
+  await expect(icon).toBeHidden();
+
+  await page.keyboard.up("Alt");
 });
 
 test("hover label flips and clamps inside the viewport", async ({ page }) => {

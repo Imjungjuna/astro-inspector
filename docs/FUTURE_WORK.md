@@ -146,16 +146,22 @@ export도 deprecated alias로 남기고, 새 기본 예시는 `astroInspector()`
   검증한다.
 - hit resolver, hash, clipboard payload, MCP는 변경하지 않았다.
 
-### 7. Locator 비활성화
+### 7. Locator 비활성화 ✅ 2026-08-03 완료
 
-우클릭만으로 제거하는 UI는 권장하지 않는다. 발견하기 어렵고 keyboard
-접근성이 없으며 브라우저 기본 context menu와 충돌한다.
+팝오버 푸터의 `Quit Extension` 버튼으로 구현했다. 아래 Pause/Disable 2단계
+모델 대신 단일 동작으로 끝냈다.
 
-권장 UI:
+- 누르면 토스트로 되살리는 법을 알린 뒤 리스너·오버레이·FAB을 모두 없앤다.
+- dev server 프로세스가 메모리에 플래그를 들고 있어 새로고침해도 돌아오지
+  않는다. `astro dev` 재시작이 유일한 복구 경로다.
+- 파일에 쓰지 않는다. 영속화하면 되돌려야 할 재시작을 살아남는다.
+- 이미 열려 있는 다른 탭은 새로고침할 때 반영된다.
 
-- 팝오버 `Preferences`에 명시적인 `Locator Enabled` toggle을 둔다.
-- FAB 우클릭은 같은 동작의 보조 shortcut으로만 고려한다.
-- 상태와 다시 켜는 방법을 toast 또는 행 설명으로 알려준다.
+우클릭 진입점은 한 번 넣었다가 제거했다. 팝오버 버튼 하나로 충분하고,
+FAB 우클릭은 원래대로 팝오버를 연다.
+
+source instrumentation을 건너뛰는 진짜 zero-overhead 모드는 여전히 미구현이다.
+현재 방식은 클라이언트 설치만 막고, 이미 변환된 모듈의 `data-*` 속성은 남는다.
 
 성능상 중요한 구분:
 

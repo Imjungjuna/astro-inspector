@@ -1,4 +1,4 @@
-import { realpathSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -15,6 +15,7 @@ import { ManifestStore } from "../manifest/store.js";
 import { LocatorSettingsStore } from "../settings/store.js";
 import {
   LOCATOR_ENDPOINT,
+  LOCATOR_SESSION_ENDPOINT,
   LOCATOR_SETTINGS_ENDPOINT,
   MANIFEST_DIRECTORY
 } from "../shared/contracts.js";
@@ -24,7 +25,37 @@ import {
   type SourcePositionMapper
 } from "./inject-jsx-source-metadata.js";
 import { createRegistrationHandler } from "./request-handler.js";
+import { createSessionHandler } from "./session-handler.js";
 import { createSettingsHandler } from "./settings-handler.js";
+
+const MCP_BIN_NAME = "astro-inspector-mcp";
+
+/**
+ * npm workspaces hoist bins to the workspace root while pnpm keeps them in the
+ * package, so both are checked before falling back to `npx`.
+ */
+export function resolveMcpCommand(
+  projectRoot: string,
+  workspaceRoot: string
+): { mcpCommand: string; mcpArgs: string[] } {
+  for (const base of new Set([projectRoot, workspaceRoot])) {
+    const candidate = path.join(base, "node_modules", ".bin", MCP_BIN_NAME);
+    try {
+      if (statSync(candidate).isFile()) {
+        return {
+          mcpCommand: candidate,
+          mcpArgs: ["--project-root", projectRoot]
+        };
+      }
+    } catch {
+      // Missing bin directories are expected; try the next base.
+    }
+  }
+  return {
+    mcpCommand: "npx",
+    mcpArgs: ["--no-install", MCP_BIN_NAME, "--project-root", projectRoot]
+  };
+}
 
 interface LocatorVitePluginOptions {
   root: string;
@@ -120,6 +151,10 @@ export function createLocatorVitePlugin(
     sessionToken: options.sessionToken,
     store: settingsStore
   });
+  const sessionHandler = createSessionHandler({
+    ...resolveMcpCommand(configuredRoot, workspaceRoot),
+    sessionToken: options.sessionToken
+  });
   const toRelativeProjectFile = (file: string) => {
     const absoluteFile = path.resolve(file);
     for (const base of [configuredRoot, root]) {
@@ -189,6 +224,12 @@ export function createLocatorVitePlugin(
         LOCATOR_SETTINGS_ENDPOINT,
         (request, response, next) => {
           void settingsHandler(request, response, next).catch(next);
+        }
+      );
+      server.middlewares.use(
+        LOCATOR_SESSION_ENDPOINT,
+        (request, response, next) => {
+          void sessionHandler(request, response, next).catch(next);
         }
       );
 

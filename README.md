@@ -101,8 +101,10 @@ Run `astro dev`, then:
 The current target shows a label in the form:
 
 ```
-<SourceTag→DomTag> │ FileName.astro │ line:column
+◆ <SourceTag→DomTag> │ FileName.astro │ line:column
 ```
+
+A brand icon at the far left marks where the element came from: the Astro mark for `.astro` templates, the React mark for `.tsx` and `.jsx`. Both sit on a small light disc so they keep their brand color against every overlay color preset. Any other extension drops the icon slot entirely rather than leaving a gap.
 
 The filename keeps its extension, and the arrow is omitted when the source tag and the rendered DOM tag are identical. The full project-relative path is preserved in the DOM metadata, the manifest, and the MCP response. Labels prefer to sit above the target. They use the space below when the label does not fit above but does fit below; if neither side fits, they choose the side with more available space. The result is then clamped to an 8px viewport inset on every edge. The 640px maximum width and ellipsis keep long source names readable without overflowing the screen.
 
@@ -148,6 +150,28 @@ Trigger, Copy As, color, and parent-level choices are stored globally and
 apply immediately on the current page. Other open locator pages pick them up
 on refresh.
 
+### The popover footer
+
+Two buttons sit below the preference rows.
+
+| Button | What it does |
+| --- | --- |
+| `Quit Extension` | Closes the locator for this dev server |
+| `Copy MCP Prompt` | Copies a setup message for your AI agent — see [MCP setup](#mcp-setup) |
+
+`Copy MCP Prompt` takes the active overlay color as its background, so it
+follows whatever preset is selected.
+
+### Closing the locator
+
+`Quit Extension` removes every listener, the overlay, and the fox button, then
+confirms with a short toast.
+
+The dev server records the choice in memory for the rest of the process, so
+**reloading the page does not bring the locator back**. Restarting `astro dev`
+does, and nothing is written to disk — the choice never outlives the process
+that received it. Other tabs already open keep working until they reload.
+
 ### Options
 
 | Option | Type | Default | Description |
@@ -162,7 +186,42 @@ integrations: [astroInspector({ showAllBoundaries: false })]
 
 ## MCP setup
 
-Register a project-local stdio command with your MCP host. `--project-root` must be an **absolute** path to the Astro project.
+### The short way
+
+Run `astro dev`, open the fox popover, and press `Copy MCP Prompt`. That copies
+a message written for an AI agent, with the absolute paths for this project
+already filled in. Paste it into any MCP-connected agent and it does the setup.
+
+The agent works out which host it is running in, so there is nothing to pick.
+
+### By hand
+
+`.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) take the same shape.
+Merge this into an existing `mcpServers` object rather than replacing the file.
+`--project-root` must be an **absolute** path to the Astro project — the
+directory `astro dev` runs in, which is where the manifest is written.
+
+```json
+{
+  "mcpServers": {
+    "astro-inspector": {
+      "command": "/absolute/path/to/your/astro-project/node_modules/.bin/astro-inspector-mcp",
+      "args": ["--project-root", "/absolute/path/to/your/astro-project"]
+    }
+  }
+}
+```
+
+Claude Code can register the same thing from the CLI:
+
+```bash
+claude mcp add astro-inspector --scope project -- \
+  "$PWD/node_modules/.bin/astro-inspector-mcp" --project-root "$PWD"
+```
+
+Point `command` at the binary rather than at `npx` whenever the host may launch
+it from another working directory. In a pnpm workspace the binary lives in the
+package's own `node_modules/.bin`, not at the workspace root.
 
 ```json
 {
@@ -174,12 +233,6 @@ Register a project-local stdio command with your MCP host. `--project-root` must
     "/absolute/path/to/your/astro-project"
   ]
 }
-```
-
-If your host launches commands from outside the Astro project, point `command` directly at the binary instead:
-
-```
-/absolute/path/to/your/astro-project/node_modules/.bin/astro-inspector-mcp
 ```
 
 ### The tool
@@ -223,6 +276,8 @@ The result: visible overlays remain selectable, stretched pseudo-elements do not
 
 Repeated renders of the same `.astro` tag share one hash across all DOM instances. When the file changes through HMR — or is deleted — its existing hashes are invalidated.
 
+The manifest holds at most 100 entries. Once a selection pushes it past that, the 50 least recently registered entries are dropped, and their hashes stop resolving. Re-selecting an element moves it back to the newest end, so a hash you are actively working with is not evicted out from under you.
+
 ---
 
 ## Runtime files
@@ -256,6 +311,7 @@ The browser never touches this file directly. On page load the client makes one 
 Additional constraints:
 
 - **Dev mode only.** Production builds receive no client, no endpoint, and no source metadata.
+- `Quit Extension` lasts for the life of the dev server process. There is no in-page way back — restart `astro dev`.
 - If clipboard permission is denied, the client falls back to a browser prompt
   containing the exact Hash or Context payload for manual copy.
 - Key combinations the browser never delivers to the page — OS-reserved `Command/Meta` shortcuts, for example — cannot be intercepted.
@@ -265,7 +321,7 @@ Additional constraints:
 
 ## Security
 
-**Dev endpoints** require a token that is regenerated for every process. The element-registration endpoint caps the request body and the source file size, and accepts only real `.astro` / `.tsx` / `.jsx` files inside the project root at valid line and column positions. The workspace-relative path used by Context copy is derived from Vite's detected workspace root only after that validation; it is returned to the authenticated browser for the current click and is not stored in the DOM, manifest, MCP result, or settings. The settings endpoint validates allowlisted trigger keys, color presets, parent levels, copy modes, context fields, Location/Line dependencies, and Location formats before an atomic write.
+**Dev endpoints** require a token that is regenerated for every process. The session endpoint reports whether the locator was closed and returns the MCP command for this project; it is the one place an absolute path reaches the browser, and it is never stored in the DOM, manifest, MCP result, or settings. The element-registration endpoint caps the request body and the source file size, and accepts only real `.astro` / `.tsx` / `.jsx` files inside the project root at valid line and column positions. The workspace-relative path used by Context copy is derived from Vite's detected workspace root only after that validation; it is returned to the authenticated browser for the current click and is not stored in the DOM, manifest, MCP result, or settings. The settings endpoint validates allowlisted trigger keys, color presets, parent levels, copy modes, context fields, Location/Line dependencies, and Location formats before an atomic write.
 
 **The MCP server** normalizes both manifest and source paths with `realpath`, blocking path traversal and symlink escapes. On stdio, `stdout` carries the MCP protocol only — all diagnostics go to `stderr`.
 

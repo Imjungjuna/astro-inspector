@@ -9,6 +9,7 @@ import { ManifestStore } from "../../src/manifest/store.js";
 import { LocatorSettingsStore } from "../../src/settings/store.js";
 import {
   LOCATOR_ENDPOINT,
+  LOCATOR_SESSION_ENDPOINT,
   LOCATOR_SETTINGS_ENDPOINT
 } from "../../src/shared/contracts.js";
 
@@ -236,7 +237,8 @@ describe("createLocatorVitePlugin", () => {
 
     expect(mountedPaths).toEqual([
       LOCATOR_ENDPOINT,
-      LOCATOR_SETTINGS_ENDPOINT
+      LOCATOR_SETTINGS_ENDPOINT,
+      LOCATOR_SESSION_ENDPOINT
     ]);
   });
 

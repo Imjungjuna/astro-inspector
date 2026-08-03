@@ -26,6 +26,7 @@ const VIEWPORT_GAP = 12;
 const DEFAULT_EDGE_GAP = 16;
 const LAUNCHER_SIZE = 46;
 const POPOVER_GAP = 6;
+const COPY_FEEDBACK_MS = 1800;
 const DRAG_THRESHOLD = 5;
 
 interface LauncherPosition {
@@ -38,6 +39,8 @@ interface SettingsPanelOptions {
   onSettingsChange(
     settings: LocatorSettings
   ): Promise<LocatorSettings | null>;
+  onCopyMcpPrompt(): Promise<boolean>;
+  onQuit(): Promise<void>;
 }
 
 export interface LocatorSettingsPanel {
@@ -199,6 +202,43 @@ export function createSettingsPanel(
       .copy-section,
       .preferences-section {
         padding: 8px;
+      }
+      .footer {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        padding: 8px;
+        border-top: 1px solid rgba(255, 255, 255, 0.14);
+      }
+      .footer-button {
+        padding: 0 8px;
+        height: 28px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.06);
+        color: #f4f4f5;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 18px;
+        white-space: nowrap;
+      }
+      .footer-button:hover {
+        background: rgba(255, 255, 255, 0.14);
+      }
+      /* Tracks the active overlay preset; applyColorPreset re-runs on change. */
+      .footer-button[data-ui-copy-mcp] {
+        border-color: transparent;
+        background: var(--locator-solid);
+      }
+      .footer-button[data-ui-copy-mcp]:hover {
+        background: var(--locator-solid);
+        filter: brightness(1.12);
+      }
+      .footer-button:focus-visible {
+        outline: 2px solid #a1a1aa;
+        outline-offset: 2px;
       }
       .section-heading {
         margin: 0 4px 6px;
@@ -604,6 +644,14 @@ export function createSettingsPanel(
             ${parentLevelButtonsMarkup}
           </span>
         </div>
+      </div>
+      <div class="footer">
+        <button class="footer-button" type="button" data-ui-quit>
+          Quit Extension
+        </button>
+        <button class="footer-button" type="button" data-ui-copy-mcp>
+          Copy MCP Prompt
+        </button>
       </div>
     </section>
     <button
@@ -1096,6 +1144,33 @@ export function createSettingsPanel(
   launcher.addEventListener("pointerup", finishPointer);
   launcher.addEventListener("pointercancel", finishPointer);
 
+  const copyMcpButton = shadow.querySelector<HTMLButtonElement>(
+    "[data-ui-copy-mcp]"
+  );
+  const quitButton = shadow.querySelector<HTMLButtonElement>("[data-ui-quit]");
+  if (!copyMcpButton || !quitButton) {
+    throw new Error("Locator settings panel could not initialize");
+  }
+
+  let copyLabelTimer = 0;
+  copyMcpButton.addEventListener("click", () => {
+    void options.onCopyMcpPrompt().then((copied) => {
+      if (!copied) {
+        return;
+      }
+      window.clearTimeout(copyLabelTimer);
+      copyMcpButton.textContent = "Copied ✓";
+      copyLabelTimer = window.setTimeout(() => {
+        copyMcpButton.textContent = "Copy MCP Prompt";
+      }, COPY_FEEDBACK_MS);
+    });
+  });
+
+  quitButton.addEventListener("click", () => {
+    setOpen(false);
+    void options.onQuit();
+  });
+
   shadow.addEventListener("contextmenu", (event) => {
     event.preventDefault();
     const target = event.target;
@@ -1139,6 +1214,7 @@ export function createSettingsPanel(
       updateSelectedSettings();
     },
     destroy() {
+      window.clearTimeout(copyLabelTimer);
       document.removeEventListener(
         "pointerdown",
         onOutsidePointerDown,

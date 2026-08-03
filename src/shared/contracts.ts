@@ -1,5 +1,6 @@
 export const LOCATOR_ENDPOINT = "/_astro-ai-locator/register";
 export const LOCATOR_SETTINGS_ENDPOINT = "/_astro-ai-locator/settings";
+export const LOCATOR_SESSION_ENDPOINT = "/_astro-ai-locator/session";
 export const MANIFEST_DIRECTORY = ".astro-ai-locator";
 export const MANIFEST_FILENAME = "manifest.json";
 export const HASH_PREFIX = "astro_hash_";
@@ -62,9 +63,21 @@ export interface RegisterElementResponse {
   workspaceFile: string;
 }
 
+/**
+ * Facts about the running dev server process, not persisted anywhere.
+ * `disabled` resets when the dev server restarts, which is the only way to
+ * bring the locator back after Quit Extension.
+ */
+export interface LocatorSessionState {
+  disabled: boolean;
+  mcpCommand: string;
+  mcpArgs: string[];
+}
+
 export interface LocatorClientOptions {
   endpoint: string;
   settingsEndpoint: string;
+  sessionEndpoint: string;
   sessionToken: string;
   showAllBoundaries: boolean;
 }

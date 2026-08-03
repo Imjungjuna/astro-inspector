@@ -8,6 +8,14 @@ import {
 } from "../shared/contracts.js";
 import { LocatorManifestSchema } from "./schema.js";
 
+/**
+ * The manifest only grows while a dev server lives; `reset()` runs once at
+ * startup. Cap it so a long clicking session cannot grow the file — and the
+ * full re-serialization on every click — without bound.
+ */
+const MAX_ENTRIES = 100;
+const EVICT_COUNT = 50;
+
 export class ManifestStore {
   readonly manifestPath: string;
   private entries = new Map<string, LocatorManifestEntry>();
@@ -32,7 +40,16 @@ export class ManifestStore {
     if (existing && JSON.stringify(existing) !== JSON.stringify(entry)) {
       throw new Error(`Locator hash collision: ${hash}`);
     }
+    // `Map.set` keeps an existing key in place, so delete first to move a
+    // re-registered hash to the back. Re-clicking means the selection is still
+    // in use, which should push it away from eviction.
+    this.entries.delete(hash);
     this.entries.set(hash, entry);
+    if (this.entries.size > MAX_ENTRIES) {
+      for (const oldest of [...this.entries.keys()].slice(0, EVICT_COUNT)) {
+        this.entries.delete(oldest);
+      }
+    }
     await this.persist();
   }
 
