@@ -8,10 +8,10 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { resolveElementByHash } from "../../src/mcp/resolve-element.js";
+import { resolveElementByToken } from "../../src/mcp/resolve-element.js";
 import { ManifestStore } from "../../src/manifest/store.js";
 
-describe("resolveElementByHash", () => {
+describe("resolveElementByToken", () => {
   it("returns the validated source and focused excerpt", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
     const file = path.join(root, "src", "Card.astro");
@@ -23,7 +23,7 @@ describe("resolveElementByHash", () => {
     );
     const store = new ManifestStore(root, { startIndex: 0 });
     await store.reset();
-    const hash = await store.issue({
+    const token = await store.issue({
       file: "src/Card.astro",
       line: 4,
       column: 1,
@@ -31,7 +31,7 @@ describe("resolveElementByHash", () => {
       domTag: "article"
     });
 
-    const result = await resolveElementByHash({ projectRoot: root, hash });
+    const result = await resolveElementByToken({ projectRoot: root, token });
 
     expect(result.relativeFile).toBe("src/Card.astro");
     expect(result.absoluteFile).toBe(await realpath(file));
@@ -44,10 +44,10 @@ describe("resolveElementByHash", () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
     const file = path.join(root, "src", "Button.tsx");
     await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, "export const Button = () => <button />;\n", "utf8");
+    await writeFile(file, "export const Button = () => <Link />;\n", "utf8");
     const store = new ManifestStore(root, { startIndex: 0 });
     await store.reset();
-    const hash = await store.issue({
+    const token = await store.issue({
       file: "src/Button.tsx",
       line: 1,
       column: 29,
@@ -55,7 +55,7 @@ describe("resolveElementByHash", () => {
       domTag: "a"
     });
 
-    const result = await resolveElementByHash({ projectRoot: root, hash });
+    const result = await resolveElementByToken({ projectRoot: root, token });
 
     expect(result.relativeFile).toBe("src/Button.tsx");
     expect(result.sourceTag).toBe("Link");
@@ -63,17 +63,17 @@ describe("resolveElementByHash", () => {
     expect(result).not.toHaveProperty("source");
   });
 
-  it("rejects an unknown hash", async () => {
+  it("rejects an unknown token", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
     const store = new ManifestStore(root, { startIndex: 0 });
     await store.reset();
 
     await expect(
-      resolveElementByHash({
+      resolveElementByToken({
         projectRoot: root,
-        hash: "astro_hash_bbbbbbbbbbbbbbbbbbbbbbbb"
+        token: "#a999"
       })
-    ).rejects.toThrow("Unknown Astro element hash");
+    ).rejects.toThrow("Unknown locator token");
   });
 
   it("rejects a manifest path that escapes the project root", async () => {
@@ -83,7 +83,7 @@ describe("resolveElementByHash", () => {
     await writeFile(outsideFile, "<div>Escape</div>\n", "utf8");
     const store = new ManifestStore(root, { startIndex: 0 });
     await store.reset();
-    const hash = await store.issue({
+    const token = await store.issue({
       file: path.relative(root, outsideFile),
       line: 1,
       column: 1,
@@ -92,7 +92,7 @@ describe("resolveElementByHash", () => {
     });
 
     await expect(
-      resolveElementByHash({ projectRoot: root, hash })
+      resolveElementByToken({ projectRoot: root, token })
     ).rejects.toThrow("Manifest entry escapes the Astro project");
   });
 
@@ -108,7 +108,7 @@ describe("resolveElementByHash", () => {
       await symlink(outsideFile, path.join(sourceDirectory, "Linked.astro"));
       const store = new ManifestStore(root, { startIndex: 0 });
       await store.reset();
-      const hash = await store.issue({
+      const token = await store.issue({
         file: "src/Linked.astro",
         line: 1,
         column: 1,
@@ -117,7 +117,7 @@ describe("resolveElementByHash", () => {
       });
 
       await expect(
-        resolveElementByHash({ projectRoot: root, hash })
+        resolveElementByToken({ projectRoot: root, token })
       ).rejects.toThrow("Manifest entry escapes the Astro project");
     }
   );
@@ -141,9 +141,9 @@ describe("resolveElementByHash", () => {
       );
 
       await expect(
-        resolveElementByHash({
+        resolveElementByToken({
           projectRoot: root,
-          hash: "astro_hash_ffffffffffffffffffffffff"
+          token: "#a999"
         })
       ).rejects.toThrow("Locator manifest escapes the Astro project");
     }
@@ -156,7 +156,7 @@ describe("resolveElementByHash", () => {
     await writeFile(source, "x".repeat(512 * 1024 + 1), "utf8");
     const store = new ManifestStore(root, { startIndex: 0 });
     await store.reset();
-    const hash = await store.issue({
+    const token = await store.issue({
       file: "src/Large.astro",
       line: 1,
       column: 1,
@@ -165,7 +165,7 @@ describe("resolveElementByHash", () => {
     });
 
     await expect(
-      resolveElementByHash({ projectRoot: root, hash })
+      resolveElementByToken({ projectRoot: root, token })
     ).rejects.toThrow("exceeds its size limit");
   });
 
@@ -176,10 +176,42 @@ describe("resolveElementByHash", () => {
     await writeFile(store.manifestPath, "{}\n", "utf8");
 
     await expect(
-      resolveElementByHash({
+      resolveElementByToken({
         projectRoot: root,
-        hash: "astro_hash_ffffffffffffffffffffffff"
+        token: "#a999"
       })
     ).rejects.toThrow();
+  });
+
+  it("rejects an entry whose tag no longer matches the source", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
+    const file = path.join(root, "src", "Card.astro");
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(
+      file,
+      "---\nconst title = 'Card';\n---\n<article>{title}</article>\n",
+      "utf8"
+    );
+    await mkdir(path.join(root, ".astro-ai-locator"), { recursive: true });
+    await writeFile(
+      path.join(root, ".astro-ai-locator", "manifest.json"),
+      JSON.stringify({
+        schemaVersion: 2,
+        entries: {
+          "#a000": {
+            file: "src/Card.astro",
+            line: 4,
+            column: 1,
+            sourceTag: "button",
+            domTag: "button"
+          }
+        }
+      }),
+      "utf8"
+    );
+
+    await expect(
+      resolveElementByToken({ projectRoot: root, token: "#a000" })
+    ).rejects.toThrow(/does not match the current source/u);
   });
 });

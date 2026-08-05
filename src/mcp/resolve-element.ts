@@ -3,15 +3,17 @@ import path from "node:path";
 import { LocatorManifestSchema } from "../manifest/schema.js";
 import {
   MANIFEST_DIRECTORY,
-  MANIFEST_FILENAME
+  MANIFEST_FILENAME,
+  TOKEN_PATTERN
 } from "../shared/contracts.js";
+import { pointsToSourceTag } from "../shared/source-tag.js";
 
 const MAX_MANIFEST_BYTES = 2 * 1024 * 1024;
 const MAX_SOURCE_BYTES = 512 * 1024;
 const SOURCE_EXTENSIONS = new Set([".astro", ".jsx", ".tsx"]);
 
 export interface ResolvedAstroElement {
-  hash: string;
+  token: string;
   relativeFile: string;
   absoluteFile: string;
   line: number;
@@ -23,7 +25,7 @@ export interface ResolvedAstroElement {
 
 interface ResolveElementOptions {
   projectRoot: string;
-  hash: string;
+  token: string;
 }
 
 function isInside(root: string, target: string): boolean {
@@ -61,11 +63,11 @@ function createExcerpt(source: string, selectedLine: number): string {
     .join("\n");
 }
 
-export async function resolveElementByHash(
+export async function resolveElementByToken(
   options: ResolveElementOptions
 ): Promise<ResolvedAstroElement> {
-  if (!/^astro_hash_[a-f0-9]{24}$/u.test(options.hash)) {
-    throw new Error("Invalid Astro element hash");
+  if (!TOKEN_PATTERN.test(options.token)) {
+    throw new Error("Invalid locator token");
   }
 
   const projectRoot = await realpath(path.resolve(options.projectRoot));
@@ -81,9 +83,9 @@ export async function resolveElementByHash(
   const manifest = LocatorManifestSchema.parse(
     JSON.parse(await readLimitedFile(canonicalManifest, MAX_MANIFEST_BYTES))
   );
-  const entry = manifest.entries[options.hash];
+  const entry = manifest.entries[options.token];
   if (!entry) {
-    throw new Error(`Unknown Astro element hash: ${options.hash}`);
+    throw new Error(`Unknown locator token: ${options.token}`);
   }
 
   const sourcePath = path.resolve(projectRoot, entry.file);
@@ -99,9 +101,14 @@ export async function resolveElementByHash(
   if (selectedLine === undefined || entry.column > selectedLine.length + 1) {
     throw new Error("Manifest location is outside the UI source");
   }
+  if (!pointsToSourceTag(selectedLine, entry.column, entry.sourceTag)) {
+    throw new Error(
+      "Manifest entry does not match the current source; the file has changed or the token belongs to another project"
+    );
+  }
 
   return {
-    hash: options.hash,
+    token: options.token,
     relativeFile: entry.file,
     absoluteFile: canonicalSource,
     line: entry.line,

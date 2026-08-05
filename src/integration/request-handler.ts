@@ -2,6 +2,7 @@ import { readFile, realpath, stat } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import { toProjectRelativeFile } from "../manifest/paths.js";
+import { pointsToSourceTag } from "../shared/source-tag.js";
 import { RegisterElementRequestSchema } from "../manifest/schema.js";
 import type { ManifestStore } from "../manifest/store.js";
 
@@ -73,13 +74,7 @@ async function validateSource(
   if (selectedLine === undefined || column > selectedLine.length + 1) {
     throw new Error("Source location is outside the file");
   }
-  const sourceAtLocation = selectedLine.slice(column - 1);
-  const tagPrefix = `<${sourceTag}`;
-  const tagBoundary = sourceAtLocation[tagPrefix.length];
-  if (
-    !sourceAtLocation.startsWith(tagPrefix) ||
-    (tagBoundary !== undefined && !/[\s/>]/u.test(tagBoundary))
-  ) {
+  if (!pointsToSourceTag(selectedLine, column, sourceTag)) {
     throw new Error("Source location does not point to the source tag");
   }
   return { canonicalFile, canonicalRoot };
