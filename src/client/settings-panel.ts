@@ -214,8 +214,10 @@ export function createSettingsPanel(
       }
       .footer-icon {
         display: grid;
-        padding: 0;
         place-items: center;
+      }
+      .footer-button.footer-icon {
+        padding: 0;
       }
       .footer-icon svg {
         width: 14px;

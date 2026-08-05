@@ -1380,6 +1380,11 @@ test("the floating launcher exposes the settings hierarchy", async ({
     await expect(heading).toHaveCSS("font-weight", "600");
   }
   await expect(popover.getByText(/^Drag to move\./u)).toHaveCount(0);
+  // Hide 아이콘은 28px 컬럼을 꽉 채우고 패딩이 없어야 SVG가 안 잘리고 중앙 정렬된다.
+  const hideButton = page.locator("[data-ui-hide]");
+  await expect(hideButton).toHaveCSS("padding", "0px");
+  const hideBox = await hideButton.boundingBox();
+  expect(hideBox?.width).toBeCloseTo(28, 0);
   await expect(popover.locator("[data-ui-color-chip]")).toHaveCount(4);
   const preferenceRows = popover.locator(".preference-row");
   await expect(preferenceRows).toHaveCount(2);
