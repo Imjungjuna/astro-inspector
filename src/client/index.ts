@@ -202,7 +202,13 @@ function getSettingsChangeMessage(
 
 function collectPointerTransparentCandidates(): Element[] {
   return Array.from(document.querySelectorAll(SOURCE_SELECTOR)).filter(
-    (element) => getComputedStyle(element).pointerEvents === "none"
+    (element) =>
+      getComputedStyle(element).pointerEvents === "none" ||
+      (element instanceof HTMLButtonElement ||
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLSelectElement ||
+        element instanceof HTMLTextAreaElement) &&
+        element.disabled
   );
 }
 
