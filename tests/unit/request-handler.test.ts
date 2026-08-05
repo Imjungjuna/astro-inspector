@@ -53,7 +53,7 @@ describe("createRegistrationHandler", () => {
     const source = path.join(root, "src", "Card.astro");
     await mkdir(path.dirname(source), { recursive: true });
     await writeFile(source, "<article>Card</article>\n", "utf8");
-    const store = new ManifestStore(root, { startIndex: 0 });
+    const store = new ManifestStore(root);
     await store.reset();
     const handler = createRegistrationHandler({
       root,
@@ -103,7 +103,7 @@ describe("createRegistrationHandler", () => {
     const source = path.join(root, "src", "Button.tsx");
     await mkdir(path.dirname(source), { recursive: true });
     await writeFile(source, "export const Button = () => <Link />;\n", "utf8");
-    const store = new ManifestStore(root, { startIndex: 0 });
+    const store = new ManifestStore(root);
     await store.reset();
     const handler = createRegistrationHandler({
       root,
@@ -152,7 +152,7 @@ describe("createRegistrationHandler", () => {
       ].join("\n"),
       "utf8"
     );
-    const store = new ManifestStore(root, { startIndex: 0 });
+    const store = new ManifestStore(root);
     await store.reset();
     const handler = createRegistrationHandler({
       root,
@@ -185,7 +185,7 @@ describe("createRegistrationHandler", () => {
     const outside = await mkdtemp(path.join(os.tmpdir(), "outside-"));
     const source = path.join(outside, "Escape.astro");
     await writeFile(source, "<div>Escape</div>\n", "utf8");
-    const store = new ManifestStore(root, { startIndex: 0 });
+    const store = new ManifestStore(root);
     await store.reset();
     const handler = createRegistrationHandler({
       root,
@@ -215,7 +215,7 @@ describe("createRegistrationHandler", () => {
     const source = path.join(root, "src", "Card.astro");
     await mkdir(path.dirname(source), { recursive: true });
     await writeFile(source, "<article>Card</article>\n", "utf8");
-    const store = new ManifestStore(root, { startIndex: 0 });
+    const store = new ManifestStore(root);
     await store.reset();
     const handler = createRegistrationHandler({
       root,
@@ -248,7 +248,7 @@ describe("createRegistrationHandler", () => {
     const source = path.join(root, "src", "Large.astro");
     await mkdir(path.dirname(source), { recursive: true });
     await writeFile(source, "x".repeat(512 * 1024 + 1), "utf8");
-    const store = new ManifestStore(root, { startIndex: 0 });
+    const store = new ManifestStore(root);
     await store.reset();
     const handler = createRegistrationHandler({
       root,
@@ -275,7 +275,7 @@ describe("createRegistrationHandler", () => {
 
   it("rejects a request body larger than 8 KiB", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
-    const store = new ManifestStore(root, { startIndex: 0 });
+    const store = new ManifestStore(root);
     await store.reset();
     const handler = createRegistrationHandler({
       root,
@@ -305,7 +305,7 @@ describe("createRegistrationHandler", () => {
     const source = path.join(root, "src", "Card.astro");
     await mkdir(path.dirname(source), { recursive: true });
     await writeFile(source, "<article>Card</article>\n", "utf8");
-    const store = new ManifestStore(root, { startIndex: 0 });
+    const store = new ManifestStore(root);
     await store.reset();
     const handler = createRegistrationHandler({
       root,

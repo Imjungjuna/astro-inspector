@@ -13,7 +13,7 @@ describe("stdio MCP server", () => {
     const sourceFile = path.join(root, "src", "Card.astro");
     await mkdir(path.dirname(sourceFile), { recursive: true });
     await writeFile(sourceFile, "<article>Card</article>\n", "utf8");
-    const store = new ManifestStore(root, { startIndex: 0 });
+    const store = new ManifestStore(root);
     await store.reset();
     const token = await store.issue({
       file: "src/Card.astro",

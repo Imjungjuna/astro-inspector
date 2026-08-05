@@ -21,7 +21,7 @@ describe("resolveElementByToken", () => {
       "---\nconst title = 'Card';\n---\n<article>{title}</article>\n",
       "utf8"
     );
-    const store = new ManifestStore(root, { startIndex: 0 });
+    const store = new ManifestStore(root);
     await store.reset();
     const token = await store.issue({
       file: "src/Card.astro",
@@ -45,7 +45,7 @@ describe("resolveElementByToken", () => {
     const file = path.join(root, "src", "Button.tsx");
     await mkdir(path.dirname(file), { recursive: true });
     await writeFile(file, "export const Button = () => <Link />;\n", "utf8");
-    const store = new ManifestStore(root, { startIndex: 0 });
+    const store = new ManifestStore(root);
     await store.reset();
     const token = await store.issue({
       file: "src/Button.tsx",
@@ -65,7 +65,7 @@ describe("resolveElementByToken", () => {
 
   it("rejects an unknown token", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
-    const store = new ManifestStore(root, { startIndex: 0 });
+    const store = new ManifestStore(root);
     await store.reset();
 
     await expect(
@@ -81,7 +81,7 @@ describe("resolveElementByToken", () => {
     const outside = await mkdtemp(path.join(os.tmpdir(), "outside-"));
     const outsideFile = path.join(outside, "Escape.astro");
     await writeFile(outsideFile, "<div>Escape</div>\n", "utf8");
-    const store = new ManifestStore(root, { startIndex: 0 });
+    const store = new ManifestStore(root);
     await store.reset();
     const token = await store.issue({
       file: path.relative(root, outsideFile),
@@ -106,7 +106,7 @@ describe("resolveElementByToken", () => {
       const sourceDirectory = path.join(root, "src");
       await mkdir(sourceDirectory, { recursive: true });
       await symlink(outsideFile, path.join(sourceDirectory, "Linked.astro"));
-      const store = new ManifestStore(root, { startIndex: 0 });
+      const store = new ManifestStore(root);
       await store.reset();
       const token = await store.issue({
         file: "src/Linked.astro",
@@ -154,7 +154,7 @@ describe("resolveElementByToken", () => {
     const source = path.join(root, "src", "Large.astro");
     await mkdir(path.dirname(source), { recursive: true });
     await writeFile(source, "x".repeat(512 * 1024 + 1), "utf8");
-    const store = new ManifestStore(root, { startIndex: 0 });
+    const store = new ManifestStore(root);
     await store.reset();
     const token = await store.issue({
       file: "src/Large.astro",
@@ -171,7 +171,7 @@ describe("resolveElementByToken", () => {
 
   it("rejects a malformed manifest", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
-    const store = new ManifestStore(root, { startIndex: 0 });
+    const store = new ManifestStore(root);
     await store.reset();
     await writeFile(store.manifestPath, "{}\n", "utf8");
 

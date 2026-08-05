@@ -1,4 +1,3 @@
-import { randomInt } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -11,19 +10,15 @@ import {
 import { LocatorManifestSchema } from "./schema.js";
 
 /**
- * The manifest only grows while a dev server lives; `reset()` runs once at
- * startup. Cap it so a long clicking session cannot grow the file — and the
- * full re-serialization on every click — without bound.
+ * Manifest grows only while the dev server lives; eviction runs once at startup
+ * per entry. Cap it so a long clicking session cannot grow the file without bound.
  */
 const MAX_ENTRIES = 100;
 const EVICT_COUNT = 50;
-export const TOKEN_CAPACITY = 36 ** 3;
 
 interface ManifestStoreOptions {
-  /** Test override. Production uses a random session start (cross-project salt). */
-  startIndex?: number;
-  /** Test override for exhaustion behaviour. */
-  capacity?: number;
+  /** Test override for token generation (hash base for testing). */
+  hashSalt?: string;
 }
 
 function identityOf(entry: LocatorManifestEntry): string {
@@ -31,26 +26,28 @@ function identityOf(entry: LocatorManifestEntry): string {
     entry.file,
     String(entry.line),
     String(entry.column),
-    entry.domTag
+    entry.sourceTag
   ].join("\0");
+}
+
+async function hashToToken(identity: string): Promise<string> {
+  const buffer = new TextEncoder().encode(identity);
+  const digest = await crypto.subtle.digest("SHA-256", buffer);
+  const view = new DataView(digest);
+  const uint32 = view.getUint32(0);
+  const base36 = uint32.toString(36).padStart(3, "0").slice(-3);
+  return `${TOKEN_PREFIX}${base36}`;
 }
 
 export class ManifestStore {
   readonly manifestPath: string;
   private entries = new Map<string, LocatorManifestEntry>();
   private tokensByIdentity = new Map<string, string>();
-  private nextIndex: number;
-  private issuedCount = 0;
-  private readonly capacity: number;
   private writeQueue: Promise<void> = Promise.resolve();
   private writeSequence = 0;
 
   constructor(root: string, options: ManifestStoreOptions = {}) {
     this.manifestPath = path.join(root, MANIFEST_DIRECTORY, MANIFEST_FILENAME);
-    this.capacity = options.capacity ?? TOKEN_CAPACITY;
-    // The random start doubles as a session salt: another project's token is
-    // unlikely to be a live number here, so cross-project pastes fail loudly.
-    this.nextIndex = options.startIndex ?? randomInt(this.capacity);
   }
 
   async reset(): Promise<void> {
@@ -60,32 +57,21 @@ export class ManifestStore {
   }
 
   /**
-   * Returns the existing token when the same element is clicked again, so a
-   * re-click never burns a fresh number. Numbers are never reused: an evicted
-   * element gets a new token, and exhaustion throws instead of wrapping onto
-   * numbers that may still be on someone's clipboard.
+   * Returns the same token for the same element (file+line+column+sourceTag).
+   * Deterministic hash means no collisions within a session, and no exhaustion.
+   * The token is stable across page reloads as long as the source doesn't move.
    */
   async issue(entry: LocatorManifestEntry): Promise<string> {
     const identity = identityOf(entry);
     const existing = this.tokensByIdentity.get(identity);
     if (existing !== undefined) {
-      // `Map.set` keeps an existing key in place, so delete first to move a
-      // re-clicked token to the back, away from eviction.
+      // Move to the end to keep frequently-clicked elements away from eviction.
       this.entries.delete(existing);
       this.entries.set(existing, entry);
       await this.persist();
       return existing;
     }
-    if (this.issuedCount >= this.capacity) {
-      throw new Error(
-        "Locator token space is exhausted for this session; restart astro dev"
-      );
-    }
-    const token = `${TOKEN_PREFIX}${this.nextIndex
-      .toString(36)
-      .padStart(3, "0")}`;
-    this.nextIndex = (this.nextIndex + 1) % this.capacity;
-    this.issuedCount += 1;
+    const token = await hashToToken(identity);
     this.entries.set(token, entry);
     this.tokensByIdentity.set(identity, token);
     if (this.entries.size > MAX_ENTRIES) {

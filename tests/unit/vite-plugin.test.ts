@@ -174,7 +174,7 @@ describe("createLocatorVitePlugin", () => {
 
   it("invalidates only entries for the changed Astro file", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
-    const store = new ManifestStore(root, { startIndex: 0 });
+    const store = new ManifestStore(root);
     const plugin = createLocatorVitePlugin({
       root,
       sessionToken: "session-token",
@@ -210,7 +210,7 @@ describe("createLocatorVitePlugin", () => {
 
   it("invalidates entries for a changed TSX source file", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
-    const store = new ManifestStore(root, { startIndex: 0 });
+    const store = new ManifestStore(root);
     const plugin = createLocatorVitePlugin({
       root,
       sessionToken: "session-token",
