@@ -127,6 +127,38 @@ test("Quit Extension closes the locator until the dev server restarts", async ({
   ).toHaveCount(0);
 });
 
+test("Hide removes the button for this page but keeps the locator working", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  await mockSessionEndpoint(page);
+  await page.goto("/");
+
+  const launcher = page.locator("[data-astro-ai-locator-launcher]");
+  await expect(launcher).toBeVisible();
+  await launcher.click();
+  await page.locator("[data-ui-hide]").click();
+
+  await expect(page.locator("[data-astro-ai-locator-toast]")).toContainText(
+    "Reload the page to bring it back"
+  );
+  await expect(launcher).toHaveCount(0);
+  await expect(page.locator("[data-astro-ai-locator-popover]")).toHaveCount(0);
+
+  // 버튼만 사라졌을 뿐 선택 기능은 그대로다.
+  await page.getByTestId("card-alpha").hover();
+  await page.keyboard.down("Alt");
+  await expect(page.locator("[data-astro-ai-locator-overlay]")).toBeVisible();
+  await expect(
+    page.locator("[data-astro-ai-locator-overlay] .label")
+  ).toHaveText(/^<h2>│Card\.astro│\d+:\d+$/u);
+  await page.keyboard.up("Alt");
+
+  // 새로고침이 유일한 복구 경로다.
+  await page.reload();
+  await expect(page.locator("[data-astro-ai-locator-launcher]")).toBeVisible();
+});
+
 test("Copy MCP Prompt puts an agent-ready setup message on the clipboard", async ({
   page
 }) => {
@@ -143,9 +175,14 @@ test("Copy MCP Prompt puts an agent-ready setup message on the clipboard", async
 
   // Quit sits left of Copy, and Copy carries the active overlay color.
   await expect(page.locator(".footer .footer-button")).toHaveText([
+    "",
     "Quit Extension",
     "Copy MCP Prompt"
   ]);
+  await expect(page.locator("[data-ui-hide]")).toHaveAttribute(
+    "aria-label",
+    "Hide the button until reload"
+  );
   await expect(copyButton).toHaveCSS("background-color", "rgb(124, 58, 237)");
 
   await copyButton.click();

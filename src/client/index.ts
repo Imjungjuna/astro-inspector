@@ -332,6 +332,16 @@ function installReadyLocator(
     window.setTimeout(requestCleanup, QUIT_FAREWELL_MS);
   };
 
+  /**
+   * Hide 는 서버에 아무것도 보내지 않는다. 이 문서의 패널 호스트만 제거하고
+   * 리스너와 오버레이는 그대로 두므로 트리거 키 선택은 계속 동작한다.
+   * 복구 경로는 새로고침뿐이다.
+   */
+  const hideLauncher = () => {
+    settingsPanel.destroy();
+    overlay.toast("Button hidden. Reload the page to bring it back.");
+  };
+
   const copyMcpPrompt = async () => {
     if (!sessionState) {
       overlay.toast("Unable to read MCP configuration");
@@ -352,6 +362,7 @@ function installReadyLocator(
     settings: currentSettings,
     onCopyMcpPrompt: copyMcpPrompt,
     onQuit: quitExtension,
+    onHide: hideLauncher,
     async onSettingsChange(nextSettings) {
       try {
         const previousSettings = currentSettings;

@@ -15,6 +15,7 @@ import {
   applyColorPreset
 } from "./color-presets.js";
 import { FOX_MARK_PATH } from "./fox-mark.js";
+import { HIDE_MARK_SVG } from "./hide-mark.js";
 
 const LAUNCHER_POSITION_KEY =
   "astro-ai-locator:launcher-position:v1";
@@ -41,6 +42,7 @@ interface SettingsPanelOptions {
   ): Promise<LocatorSettings | null>;
   onCopyMcpPrompt(): Promise<boolean>;
   onQuit(): Promise<void>;
+  onHide(): void;
 }
 
 export interface LocatorSettingsPanel {
@@ -205,10 +207,20 @@ export function createSettingsPanel(
       }
       .footer {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 28px 1fr 1fr;
         gap: 6px;
         padding: 8px;
         border-top: 1px solid rgba(255, 255, 255, 0.14);
+      }
+      .footer-icon {
+        display: grid;
+        padding: 0;
+        place-items: center;
+      }
+      .footer-icon svg {
+        width: 14px;
+        height: 14px;
+        fill: #f4f4f5;
       }
       .footer-button {
         padding: 0 8px;
@@ -646,6 +658,13 @@ export function createSettingsPanel(
         </div>
       </div>
       <div class="footer">
+        <button
+          class="footer-button footer-icon"
+          type="button"
+          data-ui-hide
+          aria-label="Hide the button until reload"
+          title="Hide the button until reload"
+        >${HIDE_MARK_SVG}</button>
         <button class="footer-button" type="button" data-ui-quit>
           Quit Extension
         </button>
@@ -1148,7 +1167,8 @@ export function createSettingsPanel(
     "[data-ui-copy-mcp]"
   );
   const quitButton = shadow.querySelector<HTMLButtonElement>("[data-ui-quit]");
-  if (!copyMcpButton || !quitButton) {
+  const hideButton = shadow.querySelector<HTMLButtonElement>("[data-ui-hide]");
+  if (!copyMcpButton || !quitButton || !hideButton) {
     throw new Error("Locator settings panel could not initialize");
   }
 
@@ -1169,6 +1189,11 @@ export function createSettingsPanel(
   quitButton.addEventListener("click", () => {
     setOpen(false);
     void options.onQuit();
+  });
+
+  hideButton.addEventListener("click", () => {
+    setOpen(false);
+    options.onHide();
   });
 
   shadow.addEventListener("contextmenu", (event) => {
