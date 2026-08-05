@@ -18,7 +18,7 @@ function toolError(message: string): CallToolResult {
 export function createMcpServer(options: McpServerOptions): McpServer {
   const server = new McpServer({
     name: "astro-inspector",
-    version: "0.3.0"
+    version: "0.4.0"
   });
 
   server.registerTool(

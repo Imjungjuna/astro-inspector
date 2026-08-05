@@ -69,34 +69,12 @@ export도 deprecated alias로 남기고, 새 기본 예시는 `astroInspector()`
 - 중복 rect, 0×0 rect, `display: contents` 조상은 별도 회귀 테스트가
   필요하다.
 
-### 3. 더 짧은 locator token
+### 3. 더 짧은 locator token ✅ 2026-08-05 완료
 
-현재 공개 형식은 `astro_hash_` + 24자리 hex다. 복사·붙여넣기용 표현을
-더 짧게 만든다.
-
-주의:
-
-- 충돌 범위는 “현재 화면의 요소 수”가 아니라 manifest 전체 entry다.
-- 여러 프로젝트 manifest를 한 MCP가 다루거나 이전 manifest가 남는
-  경우까지 고려해야 한다.
-- `a#...`는 채팅에 붙여넣기는 편하지만 shell에서는 `#`가 주석으로
-  해석될 수 있다.
-
-권장 방향:
-
-1. 내부 stable hash는 당분간 유지한다.
-2. 64-bit 이상을 base64url 또는 base36으로 표현한 짧은 public alias를
-   추가한다.
-3. MCP는 마이그레이션 기간 동안 기존 hash와 새 alias를 모두 받는다.
-4. manifest schema version을 올리고 alias collision을 생성 시점에
-   검증한다.
-5. 충분히 검증한 뒤 clipboard 기본값만 새 alias로 바꾼다.
-
-결정이 필요한 것:
-
-- prefix: `a#`, `a:`, `a_` 중 하나.
-- 목표 길이와 허용 가능한 충돌 확률.
-- 기존 hash 지원 기간과 manifest migration 방식.
+`#a` + base36 3자리(5자 고정)의 서버 순번 발급으로 구현했다. manifest cap(100)과
+기동 시 리셋으로 충돌 모집단 전제가 사라져, alias 이중 지원 없이 포맷을
+교체했다. 랜덤 시작점(세션 솔트)과 MCP 해석 시 태그 재검증이 교차 오인을
+막는다. 상세는 specs/2026-08-05-compact-token-design.md.
 
 ### 4. 복사할 정보 선택 ✅ 2026-07-30 완료
 
@@ -204,7 +182,7 @@ start`를 분리하는 2단계 모델이 가장 명확하다.
 4. ~~색상 preset UI와 overlay theme 적용을 구현한다.~~ 완료.
 5. ~~`Parent Levels`와 다중 parent box pool을 구현한다.~~ 완료.
 6. ~~`Copy As` UI와 clipboard payload를 구현한다.~~ 완료.
-7. compact token alias와 MCP backward compatibility를 구현한다.
+7. ~~compact token alias와 MCP backward compatibility를 구현한다.~~ 완료 — 서버 순번 발급으로 alias 없이 교체.
 8. `Pause`를 먼저 구현하고, true zero-load disable은 integration
    lifecycle을 별도 설계한 뒤 구현한다.
 
@@ -251,8 +229,8 @@ dedup 은 이미 파서가 버린 값이라 의미가 없다. dev 전용이고 p
 - 실사용 레포 수동 QA 는 2026-08-03 기준 **아직 수행하지 않았다.** 0.2.0 에서 나온 세 건(클라이언트 격리,
   프록시 경유 엔드포인트, 하이드레이션 경고)을 픽스처가 모두 놓쳤으므로, 0.3.0 배포 전에 실제 소비 레포에서
   세 항목을 눈으로 확인해야 한다. 앞으로 실사용 경로에서만 재현되는 회귀는 픽스처에 합성 재현을 먼저 심는다.
-- compact token의 충돌 확률과 multi-project MCP 범위는 아직 설계·측정하지
-  않았다.
+- multi-project MCP 범위는 여전히 범위 밖이다. 순번 토큰의 교차 오인은 랜덤
+  시작점과 태그 재검증으로 완화했지만 구조적 격리는 아니다.
 - true zero-load disable은 현재 runtime toggle의 작은 개선이 아니라
   Astro integration의 transform/injection lifecycle 변경이다.
 
@@ -264,5 +242,4 @@ dedup 은 이미 파서가 버린 값이라 의미가 없다. dev 전용이고 p
 3. 한 번에 모든 설정을 구현하지 않는다.
 4. npm package name 사용 가능 여부를 확인하고 public rename 범위를 먼저
    확정한다.
-5. 그다음 작업은 compact token alias와 MCP backward compatibility 설계 또는
-   `Pause`/disable lifecycle 설계 중 하나로 제한한다.
+5. 그다음 작업은 `Pause`/disable lifecycle 설계로 제한한다.

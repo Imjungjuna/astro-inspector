@@ -4,7 +4,7 @@
 
 **Click a UI element in your Astro dev server. Your AI agent gets the exact source file, line, and column.**
 
-No browser extension. No editor-specific deep links. Copy an MCP-resolvable hash
+No browser extension. No editor-specific deep links. Copy an MCP-resolvable token
 or a compact source reference straight from the page.
 
 [![Astro](https://img.shields.io/badge/Astro-6.2%2B_%7C_7.x-BC52EE?logo=astro&logoColor=white)](https://astro.build)
@@ -23,18 +23,18 @@ or a compact source reference straight from the page.
 TODO: drop media into docs/media/ and uncomment the blocks below.
 
 Recommended captures:
-  1. demo.gif        — hold trigger key, hover, click, hash lands on clipboard
+  1. demo.gif        — hold trigger key, hover, click, token lands on clipboard
   2. overlay.png     — the three-tier overlay (all boundaries / parent / current target)
   3. popover.png     — the fox button and the trigger-key settings popover
-  4. agent.png       — pasting the hash into an MCP-connected chat and getting the source back
+  4. agent.png       — pasting the token into an MCP-connected chat and getting the source back
 
-![Select an element and copy its hash](docs/media/demo.gif)
+![Select an element and copy its token](docs/media/demo.gif)
 
 | Overlay hierarchy | Settings popover |
 | --- | --- |
 | ![Overlay](docs/media/overlay.png) | ![Popover](docs/media/popover.png) |
 
-![Resolving a hash in an MCP-connected agent](docs/media/agent.png)
+![Resolving a token in an MCP-connected agent](docs/media/agent.png)
 -->
 
 ---
@@ -46,9 +46,9 @@ Telling an AI agent *"fix the padding on the card in the pricing section"* makes
 `astro-inspector` removes the guessing. You point at the pixel. The agent gets the line.
 
 ```
-You: [pastes astro_hash_0123456789abcdef01234567] make this card's padding tighter
+You: [pastes #a7k9] make this card's padding tighter
 
-Agent: → get_astro_element_by_hash
+Agent: → get_astro_element_by_token
        src/components/PricingCard.astro:24:5  <div> → <div>
        ...edits the right file on the first try
 ```
@@ -93,8 +93,8 @@ Run `astro dev`, then:
 | 1 | Hold the trigger key — `Alt` (`Option` on macOS) by default — and move the pointer over the page. |
 | 2 | Read the overlay: faint grey outlines every trackable element, progressively softer themed outlines mark the selected metadata-bearing ancestors, and the strongest themed overlay marks the current target. |
 | 3 | Click the element. |
-| 4 | By default, a hash like `astro_hash_0123456789abcdef01234567` is copied to your clipboard. |
-| 5 | Paste the hash into any MCP-connected CLI or ACP chat and ask for the change. Or choose `Context` under `Copy As` when a readable source reference is more useful. |
+| 4 | By default, a 5-character token like `#a7k9` is copied to your clipboard. Tokens start with `#`, which shells treat as a comment marker — paste them into chat or editors, not into a terminal command line. |
+| 5 | Paste the token into any MCP-connected CLI or ACP chat and ask for the change. Or choose `Context` under `Copy As` when a readable source reference is more useful. |
 
 ### The hover label
 
@@ -110,7 +110,7 @@ The filename keeps its extension, and the arrow is omitted when the source tag a
 
 ### Copy feedback
 
-After a successful click, a bottom-center status toast confirms whether a hash or Context payload was copied. It uses a short pop animation, stays visible long enough to read, and restarts cleanly for rapid consecutive clicks. The toast respects `prefers-reduced-motion` by fading without the scale or overshoot motion.
+After a successful click, a bottom-center status toast confirms whether a token or Context payload was copied. It uses a short pop animation, stays visible long enough to read, and restarts cleanly for rapid consecutive clicks. The toast respects `prefers-reduced-motion` by fading without the scale or overshoot motion.
 
 ### Changing locator preferences
 
@@ -237,7 +237,7 @@ package's own `node_modules/.bin`, not at the workspace root.
 
 ### The tool
 
-When a prompt contains an `astro_hash_` value, the model calls `get_astro_element_by_hash` and receives:
+When a prompt contains a `#a` locator token, the model calls `get_astro_element_by_token` and receives:
 
 - the project-relative file path, plus a validated absolute path
 - line, column, source tag, and rendered DOM tag
@@ -254,8 +254,8 @@ In dev mode the Astro integration installs a Vite plugin and a small browser cli
 0. **Serve.** The integration serves its own browser client from `/@astro-inspector/client/` and injects a single `head-inline` script tag pointing at it. It never shares a module with other integrations' page scripts, so a failing import elsewhere on the page cannot stop the locator from installing.
 1. **Inject.** Before Astro/React compilation, the plugin adds source-location attributes to `.astro`, `.tsx`, and `.jsx` tags inside the project root. These `data-*` attributes survive into the real DOM, including after React islands hydrate.
 2. **Select.** The browser posts the chosen location to an authenticated local dev endpoint.
-3. **Hash.** The server derives a deterministic hash and records it in a manifest.
-4. **Resolve.** A standalone stdio MCP server reads that manifest and maps the hash back to source.
+3. **Token.** The server issues a sequential 5-character token (random session start) and records it in a manifest.
+4. **Resolve.** A standalone stdio MCP server reads that manifest, maps the token back to source, and re-verifies that the recorded tag still occupies that location.
 
 ### Picking the right element
 
@@ -289,11 +289,11 @@ Consequences worth knowing:
 - A wrapper that does **not** forward its props resolves to its own definition. The call site cannot reach the DOM at all.
 - Each forwarding hop leaves one ignored duplicate set of `data-astro-ai-locator-*` attributes in the dev HTML. Spreads are resolved at runtime, so they cannot be de-duplicated at compile time. Dev only — production builds carry none of it.
 
-### Hash stability
+### Token stability
 
-Repeated renders of the same `.astro` tag share one hash across all DOM instances. When the file changes through HMR — or is deleted — its existing hashes are invalidated.
+Repeated renders of the same `.astro` tag share one token across all DOM instances. When the file changes through HMR — or is deleted — its existing tokens are invalidated.
 
-The manifest holds at most 100 entries. Once a selection pushes it past that, the 50 least recently registered entries are dropped, and their hashes stop resolving. Re-selecting an element moves it back to the newest end, so a hash you are actively working with is not evicted out from under you.
+The manifest holds at most 100 entries. Once a selection pushes it past that, the 50 least recently registered entries are dropped, and their tokens stop resolving. Re-selecting an element moves it back to the newest end, so a token you are actively working with is not evicted out from under you. Numbers are never reused within a session, so a dropped token dies loudly instead of pointing at a different element.
 
 ---
 
@@ -348,7 +348,7 @@ Additional constraints:
 
 ## Current limitations
 
-- A hash is derived from file path, line, column, and DOM tag. Moving the tag or changing what it renders produces a new hash.
+- A token stands for a file path, line, column, and DOM tag. Moving the tag or changing what it renders produces a new token.
 - Astro major versions that change the compiler AST need separate compatibility verification.
 - This release provides source *lookup* only. File-write permission and the actual code edits belong to the connected AI host.
 
