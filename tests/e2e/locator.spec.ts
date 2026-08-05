@@ -884,6 +884,60 @@ test("a forwarded component resolves to its call site, not its definition", asyn
   );
 });
 
+/**
+ * 루트 밖 래퍼(`ForwardedButton`)는 정의 파일이 아예 주입되지 않아 충돌이 없다.
+ * 루트 안 래퍼는 정의 좌표와 호출부 좌표가 같은 DOM 노드에 함께 실리므로,
+ * 어느 쪽이 남는지가 여기서 갈린다.
+ */
+test("an in-root wrapper resolves to the outermost call site", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  await mockSessionEndpoint(page);
+  await page.goto("/");
+
+  const local = page.getByTestId("local-forwarded-button");
+  await expect(local).toHaveAttribute(
+    "data-astro-ai-locator-file",
+    "src/pages/index.astro"
+  );
+  await expect(local).toHaveAttribute(
+    "data-astro-ai-locator-source-tag",
+    "LocalForwardedButton"
+  );
+
+  // 래퍼가 래퍼를 감싸도 중간 단계가 아니라 페이지 호출부가 남는다.
+  const nested = page.getByTestId("nested-forwarded-button");
+  await expect(nested).toHaveAttribute(
+    "data-astro-ai-locator-file",
+    "src/pages/index.astro"
+  );
+  await expect(nested).toHaveAttribute(
+    "data-astro-ai-locator-source-tag",
+    "NestedForwardedButton"
+  );
+});
+
+test("a wrapper that drops its props keeps only its own definition", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  await mockSessionEndpoint(page);
+  await page.goto("/");
+
+  // props 를 전달하지 않으면 호출부 좌표는 DOM 까지 오지 못한다. 이 경우 선택은
+  // 래퍼 정의 위치로 떨어진다.
+  const plain = page.getByTestId("plain-wrapper-button");
+  await expect(plain).toHaveAttribute(
+    "data-astro-ai-locator-file",
+    "src/components/PlainWrapper.astro"
+  );
+  await expect(plain).toHaveAttribute(
+    "data-astro-ai-locator-source-tag",
+    "button"
+  );
+});
+
 test("locator attributes survive hydration unchanged", async ({
   page,
   request
