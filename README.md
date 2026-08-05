@@ -273,6 +273,22 @@ The result: visible overlays remain selectable, stretched pseudo-elements do not
 | Nearest ancestor with metadata | 2px purple solid outline at 40% opacity, no fill, no label, drawn 2px outside the ancestor box so the current boundary never covers it |
 | Current target | 2px purple solid outline with a 10% fill, plus the hover label |
 
+### Wrappers
+
+A shared wrapper — `<Link>`, `<Button>`, a card shell — renders someone else's markup. The element you point at is defined in the wrapper, but the line you want to edit is almost always the call site. The locator always answers with the **outermost call site** that reaches the element.
+
+That takes two opposite injection rules, because the two Astro render paths overwrite in opposite directions:
+
+| Tag | Rendered as | Duplicate winner | Metadata goes |
+| --- | --- | --- | --- |
+| `<button>`, `<div>` — intrinsic | HTML string | first attribute in the tag | after the author's attributes, so a forwarded `{...props}` stays ahead of it |
+| `<Wrapper>` — component | props object | last key in the object | right after the tag name, so a forwarded `{...props}` overwrites it |
+
+Consequences worth knowing:
+
+- A wrapper that does **not** forward its props resolves to its own definition. The call site cannot reach the DOM at all.
+- Each forwarding hop leaves one ignored duplicate set of `data-astro-ai-locator-*` attributes in the dev HTML. Spreads are resolved at runtime, so they cannot be de-duplicated at compile time. Dev only — production builds carry none of it.
+
 ### Hash stability
 
 Repeated renders of the same `.astro` tag share one hash across all DOM instances. When the file changes through HMR — or is deleted — its existing hashes are invalidated.
@@ -305,7 +321,7 @@ The browser never touches this file directly. On page load the client makes one 
 | --- | --- |
 | ✅ `.astro` templates | Full source tracking |
 | ✅ React `.tsx` / `.jsx` in the project root | Including nested JSX inside `client:load`, `client:only="react"`, and other hydrated islands |
-| ✅ Astro/React component call sites | Metadata is injected at the call site; selectable when the component forwards its received `data-*` props to a real DOM root |
+| ✅ Astro/React component call sites | Metadata is injected at the call site; selectable when the component forwards its received `data-*` props to a real DOM root. Nested wrappers resolve to the outermost call site — see [Wrappers](#wrappers) |
 | ⚠️ Monorepo UI packages outside the project root | Source is not transformed. Only components that forward `data-*` props to the DOM are selectable, and they resolve to the in-app call site |
 | ❌ Vue, Svelte, and other framework islands | Fine-grained source tracking inside them is not supported yet |
 
