@@ -8,15 +8,14 @@ import { describe, expect, it } from "vitest";
 import { ManifestStore } from "../../src/manifest/store.js";
 
 describe("stdio MCP server", () => {
-  it("resolves a locator hash through the published CLI shape", async () => {
+  it("resolves a locator token through the published CLI shape", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
     const sourceFile = path.join(root, "src", "Card.astro");
     await mkdir(path.dirname(sourceFile), { recursive: true });
     await writeFile(sourceFile, "<article>Card</article>\n", "utf8");
-    const hash = "astro_hash_aaaaaaaaaaaaaaaaaaaaaaaa";
     const store = new ManifestStore(root);
     await store.reset();
-    await store.upsert(hash, {
+    const token = await store.issue({
       file: "src/Card.astro",
       line: 1,
       column: 1,
@@ -43,8 +42,8 @@ describe("stdio MCP server", () => {
       expect(client.getServerVersion()?.name).toBe("astro-inspector");
       const result = CallToolResultSchema.parse(
         await client.callTool({
-          name: "get_astro_element_by_hash",
-          arguments: { hash }
+          name: "get_astro_element_by_token",
+          arguments: { token }
         })
       );
       const text = result.content.find(

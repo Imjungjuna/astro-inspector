@@ -3,65 +3,97 @@ import path from "node:path";
 import {
   MANIFEST_DIRECTORY,
   MANIFEST_FILENAME,
+  TOKEN_PREFIX,
   type LocatorManifest,
   type LocatorManifestEntry
 } from "../shared/contracts.js";
 import { LocatorManifestSchema } from "./schema.js";
 
 /**
- * The manifest only grows while a dev server lives; `reset()` runs once at
- * startup. Cap it so a long clicking session cannot grow the file — and the
- * full re-serialization on every click — without bound.
+ * Manifest grows only while the dev server lives; eviction runs once at startup
+ * per entry. Cap it so a long clicking session cannot grow the file without bound.
  */
 const MAX_ENTRIES = 100;
 const EVICT_COUNT = 50;
 
+interface ManifestStoreOptions {
+  /** Test override for token generation (hash base for testing). */
+  hashSalt?: string;
+}
+
+function identityOf(entry: LocatorManifestEntry): string {
+  return [
+    entry.file,
+    String(entry.line),
+    String(entry.column),
+    entry.sourceTag
+  ].join("\0");
+}
+
+async function hashToToken(identity: string): Promise<string> {
+  const buffer = new TextEncoder().encode(identity);
+  const digest = await crypto.subtle.digest("SHA-256", buffer);
+  const view = new DataView(digest);
+  const uint32 = view.getUint32(0);
+  const base36 = uint32.toString(36).padStart(3, "0").slice(-3);
+  return `${TOKEN_PREFIX}${base36}`;
+}
+
 export class ManifestStore {
   readonly manifestPath: string;
   private entries = new Map<string, LocatorManifestEntry>();
+  private tokensByIdentity = new Map<string, string>();
   private writeQueue: Promise<void> = Promise.resolve();
   private writeSequence = 0;
 
-  constructor(root: string) {
-    this.manifestPath = path.join(
-      root,
-      MANIFEST_DIRECTORY,
-      MANIFEST_FILENAME
-    );
+  constructor(root: string, options: ManifestStoreOptions = {}) {
+    this.manifestPath = path.join(root, MANIFEST_DIRECTORY, MANIFEST_FILENAME);
   }
 
   async reset(): Promise<void> {
     this.entries.clear();
+    this.tokensByIdentity.clear();
     await this.persist();
   }
 
-  async upsert(hash: string, entry: LocatorManifestEntry): Promise<void> {
-    const existing = this.entries.get(hash);
-    if (existing && JSON.stringify(existing) !== JSON.stringify(entry)) {
-      throw new Error(`Locator hash collision: ${hash}`);
+  /**
+   * Returns the same token for the same element (file+line+column+sourceTag).
+   * Deterministic hash means no collisions within a session, and no exhaustion.
+   * The token is stable across page reloads as long as the source doesn't move.
+   */
+  async issue(entry: LocatorManifestEntry): Promise<string> {
+    const identity = identityOf(entry);
+    const existing = this.tokensByIdentity.get(identity);
+    if (existing !== undefined) {
+      // Move to the end to keep frequently-clicked elements away from eviction.
+      this.entries.delete(existing);
+      this.entries.set(existing, entry);
+      await this.persist();
+      return existing;
     }
-    // `Map.set` keeps an existing key in place, so delete first to move a
-    // re-registered hash to the back. Re-clicking means the selection is still
-    // in use, which should push it away from eviction.
-    this.entries.delete(hash);
-    this.entries.set(hash, entry);
+    const token = await hashToToken(identity);
+    this.entries.set(token, entry);
+    this.tokensByIdentity.set(identity, token);
     if (this.entries.size > MAX_ENTRIES) {
       for (const oldest of [...this.entries.keys()].slice(0, EVICT_COUNT)) {
         this.entries.delete(oldest);
       }
+      this.pruneIdentities();
     }
     await this.persist();
+    return token;
   }
 
   async removeByFile(file: string): Promise<void> {
     let changed = false;
-    for (const [hash, entry] of this.entries) {
+    for (const [token, entry] of this.entries) {
       if (entry.file === file) {
-        this.entries.delete(hash);
+        this.entries.delete(token);
         changed = true;
       }
     }
     if (changed) {
+      this.pruneIdentities();
       await this.persist();
     }
   }
@@ -71,9 +103,18 @@ export class ManifestStore {
     return LocatorManifestSchema.parse(JSON.parse(raw));
   }
 
+  /** Drops reverse-index rows whose token no longer lives in the manifest. */
+  private pruneIdentities(): void {
+    for (const [identity, token] of this.tokensByIdentity) {
+      if (!this.entries.has(token)) {
+        this.tokensByIdentity.delete(identity);
+      }
+    }
+  }
+
   private persist(): Promise<void> {
     const snapshot: LocatorManifest = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       entries: Object.fromEntries(
         [...this.entries.entries()].sort(([left], [right]) =>
           left.localeCompare(right)

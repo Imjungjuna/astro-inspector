@@ -77,18 +77,16 @@ describe("createRegistrationHandler", () => {
 
     expect(recorder.response.statusCode).toBe(200);
     const responseBody = JSON.parse(recorder.body());
-    expect(responseBody.hash).toMatch(
-      /^astro_hash_[a-f0-9]{24}$/
-    );
+    expect(responseBody.token).toMatch(/^#a[0-9a-z]{3}$/);
     expect(responseBody.workspaceFile).toBe("/apps/astro/src/Card.astro");
     expect(responseBody).not.toHaveProperty("absoluteFile");
     const manifest = JSON.parse(
       await readFile(store.manifestPath, "utf8")
     );
     expect(manifest).toEqual({
-      schemaVersion: 1,
+      schemaVersion: 2,
       entries: {
-        [responseBody.hash]: {
+        [responseBody.token]: {
           file: "src/Card.astro",
           line: 1,
           column: 1,

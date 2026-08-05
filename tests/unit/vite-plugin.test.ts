@@ -181,14 +181,14 @@ describe("createLocatorVitePlugin", () => {
       store
     });
     await store.reset();
-    await store.upsert("astro_hash_aaaaaaaaaaaaaaaaaaaaaaaa", {
+    await store.issue({
       file: "src/Card.astro",
       line: 1,
       column: 1,
       sourceTag: "article",
       domTag: "article"
     });
-    await store.upsert("astro_hash_bbbbbbbbbbbbbbbbbbbbbbbb", {
+    const kept = await store.issue({
       file: "src/Header.astro",
       line: 1,
       column: 1,
@@ -205,9 +205,7 @@ describe("createLocatorVitePlugin", () => {
       { file: path.join(root, "src", "Card.astro") } as HmrContext
     );
 
-    expect(Object.keys((await store.readSnapshot()).entries)).toEqual([
-      "astro_hash_bbbbbbbbbbbbbbbbbbbbbbbb"
-    ]);
+    expect(Object.keys((await store.readSnapshot()).entries)).toEqual([kept]);
   });
 
   it("invalidates entries for a changed TSX source file", async () => {
@@ -219,7 +217,7 @@ describe("createLocatorVitePlugin", () => {
       store
     });
     await store.reset();
-    await store.upsert("astro_hash_aaaaaaaaaaaaaaaaaaaaaaaa", {
+    await store.issue({
       file: "src/Button.tsx",
       line: 1,
       column: 29,

@@ -31,7 +31,7 @@ export function formatClipboardPayload(
   settings: LocatorSettings
 ): string {
   if (settings.copyMode === "hash") {
-    return registration.hash;
+    return registration.token;
   }
 
   const parts: string[] = [];

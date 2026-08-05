@@ -29,8 +29,9 @@ export function formatMcpSetupPrompt(state: LocatorSessionState): string {
     "",
     config,
     "",
-    "Reconnect MCP servers afterwards. From then on, whenever I paste a value",
-    "starting with astro_hash_, call get_astro_element_by_hash to resolve it to",
-    "a source file, line, and column before editing anything."
+    "Reconnect MCP servers afterwards. From then on, whenever I paste a",
+    "5-character token starting with #a (for example #a7k9), call",
+    "get_astro_element_by_token to resolve it to a source file, line, and",
+    "column before editing anything."
   ].join("\n");
 }

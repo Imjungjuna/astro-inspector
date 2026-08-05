@@ -157,7 +157,7 @@ test("Copy MCP Prompt puts an agent-ready setup message on the clipboard", async
     navigator.clipboard.readText()
   );
 
-  expect(copied).toContain("get_astro_element_by_hash");
+  expect(copied).toContain("get_astro_element_by_token");
   expect(copied).toContain(".cursor/mcp.json");
   const json = copied.slice(copied.indexOf("{"), copied.lastIndexOf("}") + 1);
   expect(JSON.parse(json)).toEqual({
@@ -547,7 +547,7 @@ test("parent levels skip zero-size and duplicate metadata ancestors", async ({
   await page.keyboard.up("Alt");
 });
 
-test("Alt click registers the source and copies its hash", async ({ page }) => {
+test("Alt click registers the source and copies its token", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => navigator.clipboard.writeText(""));
   const card = page.getByTestId("card-alpha");
@@ -555,7 +555,7 @@ test("Alt click registers the source and copies its hash", async ({ page }) => {
 
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toMatch(/^astro_hash_[a-f0-9]{24}$/);
+    .toMatch(/^#a[0-9a-z]{3}$/);
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   await expect(page.locator("[data-astro-ai-locator-toast]")).toContainText(
     "Copied"
@@ -847,7 +847,7 @@ test("component call-site metadata reaches its rendered child DOM", async ({
 
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toMatch(/^astro_hash_[a-f0-9]{24}$/);
+    .toMatch(/^#a[0-9a-z]{3}$/);
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   const manifestPath = path.resolve(
     "tests/fixtures/basic/.astro-ai-locator/manifest.json"
@@ -1006,7 +1006,7 @@ test("React island descendants are selectable at their exact JSX source", async 
 
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toMatch(/^astro_hash_[a-f0-9]{24}$/);
+    .toMatch(/^#a[0-9a-z]{3}$/);
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   const manifestPath = path.resolve(
     "tests/fixtures/basic/.astro-ai-locator/manifest.json"
@@ -1059,7 +1059,7 @@ test("a stretched pseudo-element cannot block its underlying source element", as
 
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toMatch(/^astro_hash_[a-f0-9]{24}$/);
+    .toMatch(/^#a[0-9a-z]{3}$/);
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   const manifestPath = path.resolve(
     "tests/fixtures/basic/.astro-ai-locator/manifest.json"
@@ -1107,7 +1107,7 @@ test("a real DOM overlay blocks annotated elements behind it", async ({
 
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toMatch(/^astro_hash_[a-f0-9]{24}$/);
+    .toMatch(/^#a[0-9a-z]{3}$/);
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   const manifestPath = path.resolve(
     "tests/fixtures/basic/.astro-ai-locator/manifest.json"
@@ -1155,7 +1155,7 @@ test("an annotated pointer-events none child remains selectable", async ({
 
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toMatch(/^astro_hash_[a-f0-9]{24}$/);
+    .toMatch(/^#a[0-9a-z]{3}$/);
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   const manifestPath = path.resolve(
     "tests/fixtures/basic/.astro-ai-locator/manifest.json"
@@ -1169,7 +1169,7 @@ test("an annotated pointer-events none child remains selectable", async ({
   });
 });
 
-test("repeated DOM instances from one source tag share one hash", async ({
+test("repeated DOM instances from one source tag share one token", async ({
   page
 }) => {
   await page.goto("/");
@@ -1179,7 +1179,7 @@ test("repeated DOM instances from one source tag share one hash", async ({
     .click({ modifiers: ["Alt"], position: { x: 4, y: 4 } });
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toMatch(/^astro_hash_[a-f0-9]{24}$/);
+    .toMatch(/^#a[0-9a-z]{3}$/);
   const first = await page.evaluate(() => navigator.clipboard.readText());
   await page.evaluate(() => navigator.clipboard.writeText(""));
   await page
@@ -1187,13 +1187,13 @@ test("repeated DOM instances from one source tag share one hash", async ({
     .click({ modifiers: ["Alt"], position: { x: 4, y: 4 } });
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toMatch(/^astro_hash_[a-f0-9]{24}$/);
+    .toMatch(/^#a[0-9a-z]{3}$/);
   const second = await page.evaluate(() => navigator.clipboard.readText());
 
   expect(first).toBe(second);
 });
 
-test("the copied browser hash resolves to the same entry through MCP", async ({
+test("the copied browser token resolves to the same entry through MCP", async ({
   page
 }) => {
   await page.goto("/");
@@ -1203,8 +1203,8 @@ test("the copied browser hash resolves to the same entry through MCP", async ({
     .click({ modifiers: ["Alt"], position: { x: 4, y: 4 } });
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toMatch(/^astro_hash_[a-f0-9]{24}$/);
-  const hash = await page.evaluate(() => navigator.clipboard.readText());
+    .toMatch(/^#a[0-9a-z]{3}$/);
+  const token = await page.evaluate(() => navigator.clipboard.readText());
   const fixtureRoot = path.resolve("tests/fixtures/basic");
   const manifest = JSON.parse(
     await readFile(
@@ -1223,10 +1223,10 @@ test("the copied browser hash resolves to the same entry through MCP", async ({
       }
     >;
   };
-  const expectedEntry = manifest.entries[hash];
+  const expectedEntry = manifest.entries[token];
   expect(expectedEntry).toBeDefined();
   if (!expectedEntry) {
-    throw new Error(`Manifest entry was not written for ${hash}`);
+    throw new Error(`Manifest entry was not written for ${token}`);
   }
 
   const transport = new StdioClientTransport({
@@ -1247,14 +1247,14 @@ test("the copied browser hash resolves to the same entry through MCP", async ({
     await client.connect(transport);
     const result = CallToolResultSchema.parse(
       await client.callTool({
-        name: "get_astro_element_by_hash",
-        arguments: { hash }
+        name: "get_astro_element_by_token",
+        arguments: { token }
       })
     );
     const text = result.content.find((item) => item.type === "text");
     expect(text).toBeDefined();
     const resolved = JSON.parse(text?.text ?? "{}") as {
-      hash: string;
+      token: string;
       relativeFile: string;
       line: number;
       column: number;
@@ -1262,7 +1262,7 @@ test("the copied browser hash resolves to the same entry through MCP", async ({
       domTag: string;
     };
     expect(resolved).toMatchObject({
-      hash,
+      token,
       relativeFile: expectedEntry.file,
       line: expectedEntry.line,
       column: expectedEntry.column,

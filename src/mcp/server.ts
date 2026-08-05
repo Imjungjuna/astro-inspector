@@ -1,7 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod/v4";
-import { resolveElementByHash } from "./resolve-element.js";
+import { TOKEN_PATTERN } from "../shared/contracts.js";
+import { resolveElementByToken } from "./resolve-element.js";
 
 interface McpServerOptions {
   projectRoot: string;
@@ -17,27 +18,27 @@ function toolError(message: string): CallToolResult {
 export function createMcpServer(options: McpServerOptions): McpServer {
   const server = new McpServer({
     name: "astro-inspector",
-    version: "0.3.0"
+    version: "0.4.0"
   });
 
   server.registerTool(
-    "get_astro_element_by_hash",
+    "get_astro_element_by_token",
     {
       title: "Resolve an Astro UI element",
       description:
-        "Call this whenever the user provides an astro_hash_ value. Returns the exact Astro, JSX, or TSX source file, line, column, source tag, rendered DOM tag, and a focused source excerpt for that selected UI element.",
+        "Call this whenever the user provides a 5-character locator token starting with #a (for example #a7k9). Returns the exact Astro, JSX, or TSX source file, line, column, source tag, rendered DOM tag, and a focused source excerpt for that selected UI element.",
       inputSchema: {
-        hash: z
+        token: z
           .string()
-          .regex(/^astro_hash_[a-f0-9]{24}$/u)
-          .describe("The hash copied by Astro Inspector")
+          .regex(TOKEN_PATTERN)
+          .describe("The token copied by Astro Inspector, like #a7k9")
       }
     },
-    async ({ hash }): Promise<CallToolResult> => {
+    async ({ token }): Promise<CallToolResult> => {
       try {
-        const result = await resolveElementByHash({
+        const result = await resolveElementByToken({
           projectRoot: options.projectRoot,
-          hash
+          token
         });
         return {
           content: [
@@ -50,7 +51,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Unable to resolve element";
-        console.error("get_astro_element_by_hash failed:", message);
+        console.error("get_astro_element_by_token failed:", message);
         return toolError(message);
       }
     }

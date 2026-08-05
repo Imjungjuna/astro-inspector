@@ -58,6 +58,6 @@ describe("formatMcpSetupPrompt", () => {
     expect(prompt).toContain(".mcp.json");
     expect(prompt).toContain(".cursor/mcp.json");
     expect(prompt).toContain("merge it into an existing");
-    expect(prompt).toContain("get_astro_element_by_hash");
+    expect(prompt).toContain("get_astro_element_by_token");
   });
 });
