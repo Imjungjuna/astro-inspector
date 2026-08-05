@@ -152,10 +152,11 @@ on refresh.
 
 ### The popover footer
 
-Two buttons sit below the preference rows.
+Three controls sit below the preference rows.
 
 | Button | What it does |
 | --- | --- |
+| eye-off icon | Hides the fox button for this page only — see [Closing the locator](#closing-the-locator) |
 | `Quit Extension` | Closes the locator for this dev server |
 | `Copy MCP Prompt` | Copies a setup message for your AI agent — see [MCP setup](#mcp-setup) |
 
@@ -164,13 +165,13 @@ follows whatever preset is selected.
 
 ### Closing the locator
 
-`Quit Extension` removes every listener, the overlay, and the fox button, then
-confirms with a short toast.
+There are two ways out, and they differ in how far they reach.
 
-The dev server records the choice in memory for the rest of the process, so
-**reloading the page does not bring the locator back**. Restarting `astro dev`
-does, and nothing is written to disk — the choice never outlives the process
-that received it. Other tabs already open keep working until they reload.
+**Hide** — the eye-off icon removes the fox button and its popover from the current page. Nothing else changes: hold the trigger key and selection still works. Nothing is sent to the dev server and nothing is stored, so a reload brings the button back.
+
+**Quit Extension** — removes every listener, the overlay, and the fox button, then confirms with a short toast. The dev server records the choice in memory for the rest of the process, so **reloading the page does not bring the locator back**, and from that point it also stops instrumenting source files: `.astro`, `.tsx`, and `.jsx` are served as written, the registration endpoint answers `410`, and the file watcher hook is detached. Already-compiled modules are dropped from the module graph without pushing an HMR update, so the tab you are looking at keeps its state and the next navigation is clean.
+
+One thing survives: the small client script tag. Astro injects it when the dev server starts and there is no way to withdraw it mid-run, so each page still fetches the client asset and asks the session endpoint once, then shuts itself down. A fully zero-load dev server needs a restart, which is also the only way to bring the locator back. Nothing is written to disk — the choice never outlives the process that received it. Other tabs already open keep working until they reload.
 
 ### Options
 

@@ -138,8 +138,11 @@ export도 deprecated alias로 남기고, 새 기본 예시는 `astroInspector()`
 우클릭 진입점은 한 번 넣었다가 제거했다. 팝오버 버튼 하나로 충분하고,
 FAB 우클릭은 원래대로 팝오버를 연다.
 
-source instrumentation을 건너뛰는 진짜 zero-overhead 모드는 여전히 미구현이다.
-현재 방식은 클라이언트 설치만 막고, 이미 변환된 모듈의 `data-*` 속성은 남는다.
+2026-08-05: Quit이 source instrumentation까지 멈추도록 확장했다(0.6.0). `load()` 주입 skip,
+`/register` 410, watcher 해제, 모듈 그래프 무효화까지 간다. 남은 잔여 부하는 head-inline
+스크립트 태그 하나뿐이며, 이것은 integration이 기동 시 심는 것이라 dev 실행 중 회수할 수 없다.
+완전한 zero-load는 여전히 재시작이 필요하다. 아래 Pause/Disable 2단계 모델은 폐기한다 —
+Hide(이 탭만)와 Quit(서버까지)의 두 갈래로 대체됐다.
 
 성능상 중요한 구분:
 
