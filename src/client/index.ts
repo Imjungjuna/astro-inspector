@@ -258,6 +258,8 @@ async function copyText(text: string): Promise<void> {
 }
 
 const QUIT_FAREWELL_MS = 1800;
+const FAREWELL_SESSION_CLOSED =
+  "Locator closed. Restart the dev server to bring it back.";
 
 function installReadyLocator(
   options: LocatorClientOptions,
@@ -315,21 +317,25 @@ function installReadyLocator(
   };
 
   let quitting = false;
+  // Quit(성공/실패)과 410 응답 처리가 공유하는 마무리 경로: 작별 토스트를 띄우고
+  // 토스트가 끝날 시간을 준 뒤 이 탭을 정리한다.
+  const closeLocatorSession = (farewell: string) => {
+    overlay.toast(farewell);
+    // Let the toast finish before the overlay that renders it is destroyed.
+    window.setTimeout(requestCleanup, QUIT_FAREWELL_MS);
+  };
   const quitExtension = async () => {
     if (quitting) {
       return;
     }
     quitting = true;
-    let farewell =
-      "Locator closed. Restart the dev server to bring it back.";
+    let farewell = FAREWELL_SESSION_CLOSED;
     try {
       await quitLocatorSession(options);
     } catch {
       farewell = "Locator closed here only. Reload the page to bring it back.";
     }
-    overlay.toast(farewell);
-    // Let the toast finish before the overlay that renders it is destroyed.
-    window.setTimeout(requestCleanup, QUIT_FAREWELL_MS);
+    closeLocatorSession(farewell);
   };
 
   /**
@@ -490,6 +496,14 @@ function installReadyLocator(
         },
         body: JSON.stringify(input)
       });
+      if (response.status === 410) {
+        // 다른 탭에서 이미 Quit 했다: 이 탭도 같은 작별 인사와 정리 경로를 탄다.
+        if (!quitting) {
+          quitting = true;
+          closeLocatorSession(FAREWELL_SESSION_CLOSED);
+        }
+        return;
+      }
       if (!response.ok) {
         throw new Error(`Registration failed with HTTP ${response.status}`);
       }

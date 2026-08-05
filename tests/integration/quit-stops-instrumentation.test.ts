@@ -1,4 +1,6 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
+import { once } from "node:events";
+import { connect } from "node:net";
 import { describe, expect, it } from "vitest";
 
 const PORT = 45174;
@@ -19,12 +21,50 @@ async function waitForServer(): Promise<void> {
   throw new Error("Fixture dev server did not start");
 }
 
+/**
+ * `astro dev --port` 는 강제가 아니라 희망 사항이라, 자리가 차 있으면 다음
+ * 빈 포트로 조용히 넘어간다. 이전에 강제 종료된 실행이 이 포트를 여전히
+ * 붙들고 있으면 이 테스트는 그 낡은 서버에 연결해 엉뚱한 프로세스를
+ * 검증하게 된다 — 그러느니 시끄럽게 실패하는 게 낫다.
+ */
+async function assertPortIsFree(): Promise<void> {
+  const occupied = await new Promise<boolean>((resolve) => {
+    const socket = connect({ port: PORT, host: "127.0.0.1" });
+    socket.once("connect", () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once("error", () => {
+      resolve(false);
+    });
+  });
+  if (occupied) {
+    throw new Error(
+      `Port ${PORT} is already occupied — a previous aborted run of this ` +
+        `test likely left a dev server behind. Find and kill it (e.g. ` +
+        `\`lsof -i :${PORT}\`) before rerunning this test.`
+    );
+  }
+}
+
+/** SIGTERM 발송은 종료를 요청할 뿐이라, 실제로 죽을 때까지 기다려야 다음 실행이 포트를 안전하게 재사용한다. */
+async function waitForExit(child: ChildProcess, timeoutMs: number): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+  await Promise.race([
+    once(child, "exit"),
+    new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))
+  ]);
+}
+
 describe("quit stops server-side instrumentation", () => {
   it("serves clean HTML after the session is quit", async () => {
     // Astro 의 dev 서버 플러그인은 `process.env.VITEST` 가 있으면 자체 라우트
     // 핸들러 연결을 건너뛴다(자기 자신의 vitest 스위트를 위한 배려). 이 프로세스가
     // vitest 아래서 돌고 있어 그 값이 상속되므로, 자식 astro dev 에는 지워서
     // 넘긴다 — 안 그러면 `/` 가 항상 404 를 뱉는다.
+    await assertPortIsFree();
     const { VITEST: _vitest, ...envWithoutVitest } = process.env;
     const server = spawn(
       "npx",
@@ -103,6 +143,8 @@ describe("quit stops server-side instrumentation", () => {
         } catch {
           // 이미 죽은 프로세스 그룹은 무시한다.
         }
+        // 다음 실행이 포트를 안전하게 재사용하도록 실제로 죽을 때까지 기다린다.
+        await waitForExit(server, 5000);
       }
     }
   }, 120_000);

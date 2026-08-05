@@ -36,4 +36,19 @@ describe("createSessionState", () => {
 
     expect(listener).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps running later listeners and does not throw when one listener throws", () => {
+    const state = createSessionState();
+    const throwing = vi.fn(() => {
+      throw new Error("listener boom");
+    });
+    const after = vi.fn();
+    state.onDisable(throwing);
+    state.onDisable(after);
+
+    expect(() => state.disable()).not.toThrow();
+
+    expect(throwing).toHaveBeenCalledTimes(1);
+    expect(after).toHaveBeenCalledTimes(1);
+  });
 });

@@ -21,7 +21,12 @@ export function createSessionState(): LocatorSessionStateStore {
       }
       disabled = true;
       for (const listener of listeners) {
-        listener();
+        try {
+          listener();
+        } catch {
+          // 정리 리스너 하나가 던져도 quit 응답(HTTP 200)을 망치거나 나머지
+          // 리스너를 건너뛰면 안 된다.
+        }
       }
     },
     // 이미 닫힌 뒤 붙는 리스너도 정리 작업을 놓치면 안 되므로 즉시 실행한다.

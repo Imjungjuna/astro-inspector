@@ -327,14 +327,19 @@ describe("createLocatorVitePlugin", () => {
     if (typeof configureServer !== "function") {
       throw new Error("Expected a callable configureServer hook");
     }
-    const detached: string[] = [];
+    const detached: Array<[string, unknown]> = [];
+    let attachedUnlinkHandler: unknown;
 
     configureServer.call({} as never, {
       middlewares: { use() {} },
       watcher: {
-        on() {},
-        off(event: string) {
-          detached.push(event);
+        on(event: string, handler: unknown) {
+          if (event === "unlink") {
+            attachedUnlinkHandler = handler;
+          }
+        },
+        off(event: string, handler: unknown) {
+          detached.push([event, handler]);
         }
       },
       httpServer: null,
@@ -342,8 +347,12 @@ describe("createLocatorVitePlugin", () => {
       environments: {}
     } as never);
 
+    expect(typeof attachedUnlinkHandler).toBe("function");
+
     session.disable();
 
-    expect(detached).toContain("unlink");
+    // `off("unlink")` 인자 없이 부르면 Vite 자체 리스너까지 다 떨어져 나간다.
+    // 붙였던 핸들러와 같은 함수 참조인지까지 확인해야 그 실수를 잡아낸다.
+    expect(detached).toContainEqual(["unlink", attachedUnlinkHandler]);
   });
 });

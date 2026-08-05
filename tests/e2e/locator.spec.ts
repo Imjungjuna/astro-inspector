@@ -865,6 +865,32 @@ test("Copy As does not copy when registration fails", async ({ page }) => {
   ).toContainText("Registration failed with HTTP 500");
 });
 
+test("a 410 from registration tears this tab down like Quit did elsewhere", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  await page.route("**/@astro-inspector/register", async (route) => {
+    await route.fulfill({
+      status: 410,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Locator is closed for this dev server" })
+    });
+  });
+  await page.goto("/");
+
+  const launcher = page.locator("[data-astro-ai-locator-launcher]");
+  await expect(launcher).toBeVisible();
+
+  await page
+    .getByTestId("card-alpha")
+    .click({ modifiers: ["Alt"], position: { x: 4, y: 4 } });
+
+  await expect(page.locator("[data-astro-ai-locator-toast]")).toContainText(
+    "Restart the dev server"
+  );
+  await expect(launcher).toHaveCount(0);
+});
+
 test("component call-site metadata reaches its rendered child DOM", async ({
   page
 }) => {
