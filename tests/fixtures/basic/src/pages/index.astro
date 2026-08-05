@@ -2,6 +2,9 @@
 import Card from "../components/Card.astro";
 import ReactIsland from "../components/ReactIsland";
 import ForwardedButton from "../../../shared/ForwardedButton.astro";
+import LocalForwardedButton from "../components/LocalForwardedButton.astro";
+import NestedForwardedButton from "../components/NestedForwardedButton.astro";
+import PlainWrapper from "../components/PlainWrapper.astro";
 ---
 
 <html lang="en">
@@ -16,7 +19,14 @@ import ForwardedButton from "../../../shared/ForwardedButton.astro";
       <ForwardedButton data-testid="forwarded-button">
         Forwarded component button
       </ForwardedButton>
-      <ReactIsland client:only="react" />
+      <LocalForwardedButton data-testid="local-forwarded-button">
+        In-root forwarded button
+      </LocalForwardedButton>
+      <NestedForwardedButton data-testid="nested-forwarded-button">
+        Nested forwarded button
+      </NestedForwardedButton>
+      <PlainWrapper>Wrapper that drops its props</PlainWrapper>
+      <ReactIsland client:load />
     </main>
   </body>
 </html>

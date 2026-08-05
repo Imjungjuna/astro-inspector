@@ -36,7 +36,7 @@ async function mockSettingsEndpoint(
     ...initialCopySettings
   };
   let rejectNextWrite = false;
-  await page.route("**/_astro-ai-locator/settings", async (route) => {
+  await page.route("**/@astro-inspector/settings", async (route) => {
     const request = route.request();
     if (request.method() === "PUT" && rejectNextWrite) {
       rejectNextWrite = false;
@@ -73,7 +73,7 @@ async function mockSettingsEndpoint(
  */
 async function mockSessionEndpoint(page: Page) {
   let disabled = false;
-  await page.route("**/_astro-ai-locator/session", async (route) => {
+  await page.route("**/@astro-inspector/session", async (route) => {
     if (route.request().method() === "POST") {
       disabled = true;
     }
@@ -806,7 +806,7 @@ test("Copy As does not copy when registration fails", async ({ page }) => {
     contextFields: ["tag"],
     locationFormat: "path"
   });
-  await page.route("**/_astro-ai-locator/register", async (route) => {
+  await page.route("**/@astro-inspector/register", async (route) => {
     await route.fulfill({
       status: 500,
       contentType: "application/json",
@@ -864,6 +864,127 @@ test("component call-site metadata reaches its rendered child DOM", async ({
     sourceTag: "ForwardedButton",
     domTag: "button"
   });
+});
+
+test("a forwarded component resolves to its call site, not its definition", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  await mockSessionEndpoint(page);
+  await page.goto("/");
+
+  const forwarded = page.getByTestId("forwarded-button");
+  await expect(forwarded).toHaveAttribute(
+    "data-astro-ai-locator-file",
+    /index\.astro$/u
+  );
+  await expect(forwarded).toHaveAttribute(
+    "data-astro-ai-locator-source-tag",
+    "ForwardedButton"
+  );
+});
+
+/**
+ * 루트 밖 래퍼(`ForwardedButton`)는 정의 파일이 아예 주입되지 않아 충돌이 없다.
+ * 루트 안 래퍼는 정의 좌표와 호출부 좌표가 같은 DOM 노드에 함께 실리므로,
+ * 어느 쪽이 남는지가 여기서 갈린다.
+ */
+test("an in-root wrapper resolves to the outermost call site", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  await mockSessionEndpoint(page);
+  await page.goto("/");
+
+  const local = page.getByTestId("local-forwarded-button");
+  await expect(local).toHaveAttribute(
+    "data-astro-ai-locator-file",
+    "src/pages/index.astro"
+  );
+  await expect(local).toHaveAttribute(
+    "data-astro-ai-locator-source-tag",
+    "LocalForwardedButton"
+  );
+
+  // 래퍼가 래퍼를 감싸도 중간 단계가 아니라 페이지 호출부가 남는다.
+  const nested = page.getByTestId("nested-forwarded-button");
+  await expect(nested).toHaveAttribute(
+    "data-astro-ai-locator-file",
+    "src/pages/index.astro"
+  );
+  await expect(nested).toHaveAttribute(
+    "data-astro-ai-locator-source-tag",
+    "NestedForwardedButton"
+  );
+});
+
+test("a wrapper that drops its props keeps only its own definition", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  await mockSessionEndpoint(page);
+  await page.goto("/");
+
+  // props 를 전달하지 않으면 호출부 좌표는 DOM 까지 오지 못한다. 이 경우 선택은
+  // 래퍼 정의 위치로 떨어진다.
+  const plain = page.getByTestId("plain-wrapper-button");
+  await expect(plain).toHaveAttribute(
+    "data-astro-ai-locator-file",
+    "src/components/PlainWrapper.astro"
+  );
+  await expect(plain).toHaveAttribute(
+    "data-astro-ai-locator-source-tag",
+    "button"
+  );
+});
+
+test("locator attributes survive hydration unchanged", async ({
+  page,
+  request
+}) => {
+  await mockSettingsEndpoint(page);
+  await mockSessionEndpoint(page);
+
+  // 1. SSR 이 내려보낸 원본 HTML 에서 값을 읽는다.
+  const html = await (await request.get("/")).text();
+  const ssrMatches = [
+    ...html.matchAll(
+      /data-astro-ai-locator-file="([^"]*ReactIsland\.tsx)"\s+data-astro-ai-locator-loc="(\d+:\d+)"/gu
+    )
+  ].map((match) => `${match[1]}@${match[2]}`);
+  expect(ssrMatches.length).toBeGreaterThan(0);
+
+  // 2. 브라우저가 하이드레이션에 쓰는 client 모듈에서 같은 값을 읽는다.
+  //    하이드레이션은 서버가 보낸 속성을 덮어쓰지 않으므로 DOM 만 봐서는 두 파이프라인의
+  //    불일치가 드러나지 않는다. 실제로 갈라지는 지점은 두 파이프라인이 내보낸 모듈이다.
+  const clientModule = await (
+    await request.get("/src/components/ReactIsland.tsx")
+  ).text();
+  const clientMatches = [
+    ...clientModule.matchAll(
+      /"data-astro-ai-locator-file": "([^"]*ReactIsland\.tsx)",\s*"data-astro-ai-locator-loc": "(\d+:\d+)"/gu
+    )
+  ].map((match) => `${match[1]}@${match[2]}`);
+
+  expect(clientMatches).toEqual(ssrMatches);
+
+  // 3. 하이드레이션 뒤 DOM 도 같은 값을 유지한다.
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-astro-ai-locator-ready",
+    ""
+  );
+  const domMatches = await page.evaluate(() =>
+    [...document.querySelectorAll("[data-astro-ai-locator-file]")]
+      .map((element) => ({
+        file: element.getAttribute("data-astro-ai-locator-file") ?? "",
+        loc: element.getAttribute("data-astro-ai-locator-loc") ?? ""
+      }))
+      .filter((entry) => entry.file.endsWith("ReactIsland.tsx"))
+      .map((entry) => `${entry.file}@${entry.loc}`)
+  );
+
+  expect(domMatches).toEqual(ssrMatches);
 });
 
 test("React island descendants are selectable at their exact JSX source", async ({

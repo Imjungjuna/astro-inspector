@@ -1,11 +1,7 @@
 import { realpathSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import {
-  TraceMap,
-  originalPositionFor,
-  type SourceMapInput
-} from "@jridgewell/trace-mapping";
+import { fileURLToPath } from "node:url";
 import { searchForWorkspaceRoot, type Plugin } from "vite";
 import {
   normalizeRelativeFile,
@@ -14,16 +10,15 @@ import {
 import { ManifestStore } from "../manifest/store.js";
 import { LocatorSettingsStore } from "../settings/store.js";
 import {
+  LOCATOR_ASSET_ENDPOINT,
   LOCATOR_ENDPOINT,
   LOCATOR_SESSION_ENDPOINT,
   LOCATOR_SETTINGS_ENDPOINT,
   MANIFEST_DIRECTORY
 } from "../shared/contracts.js";
+import { createClientAssetHandler } from "./client-asset-handler.js";
 import { injectAstroSourceMetadata } from "./inject-source-metadata.js";
-import {
-  injectJsxSourceMetadata,
-  type SourcePositionMapper
-} from "./inject-jsx-source-metadata.js";
+import { injectJsxSourceMetadata } from "./inject-jsx-source-metadata.js";
 import { createRegistrationHandler } from "./request-handler.js";
 import { createSessionHandler } from "./session-handler.js";
 import { createSettingsHandler } from "./settings-handler.js";
@@ -68,44 +63,6 @@ const SOURCE_EXTENSIONS = new Set([".astro", ".jsx", ".tsx"]);
 
 function isSourceFile(file: string): boolean {
   return SOURCE_EXTENSIONS.has(path.extname(file).toLowerCase());
-}
-
-function createSourcePositionMapper(
-  combinedMap: unknown
-): SourcePositionMapper | undefined {
-  if (
-    !combinedMap ||
-    typeof combinedMap !== "object" ||
-    !("mappings" in combinedMap) ||
-    typeof combinedMap.mappings !== "string" ||
-    combinedMap.mappings.length === 0
-  ) {
-    return undefined;
-  }
-  let traceMap: TraceMap;
-  try {
-    traceMap = new TraceMap(combinedMap as SourceMapInput);
-  } catch {
-    return undefined;
-  }
-
-  return ({ line, column }) => {
-    const original = originalPositionFor(traceMap, {
-      line,
-      column: column - 1
-    });
-    if (
-      original.source === null ||
-      original.line === null ||
-      original.column === null
-    ) {
-      return null;
-    }
-    return {
-      line: original.line,
-      column: original.column + 1
-    };
-  };
 }
 
 export function createLocatorVitePlugin(
@@ -155,6 +112,9 @@ export function createLocatorVitePlugin(
     ...resolveMcpCommand(configuredRoot, workspaceRoot),
     sessionToken: options.sessionToken
   });
+  // dist/integration/vite-plugin.js 기준 한 단계 위가 dist 루트다.
+  const distDirectory = fileURLToPath(new URL("..", import.meta.url));
+  const clientAssetHandler = createClientAssetHandler({ distDirectory });
   const toRelativeProjectFile = (file: string) => {
     const absoluteFile = path.resolve(file);
     for (const base of [configuredRoot, root]) {
@@ -184,35 +144,27 @@ export function createLocatorVitePlugin(
         }
       };
     },
+    // Injection happens in `load`, not `transform`: `load` only ever sees the
+    // file on disk, so the SSR and client pipelines start from the same string
+    // and later transforms cannot shift the coordinates already baked in.
     async load(id) {
-      const file = id.split("?", 1)[0];
-      if (!file || path.extname(file).toLowerCase() !== ".astro") {
+      // `?raw`, `?url` and friends still end in a source extension but must be
+      // served verbatim.
+      if (id.includes("?")) {
         return null;
       }
-      this.addWatchFile(file);
-      const code = await readFile(file, "utf8");
-      return injectAstroSourceMetadata(code, file, configuredRoot);
-    },
-    async transform(code, id) {
       const file = id.split("?", 1)[0];
       if (!file || !isSourceFile(file)) {
         return null;
       }
-      const getCombinedSourcemap = this.getCombinedSourcemap;
-      const mapPosition =
-        typeof getCombinedSourcemap === "function"
-          ? createSourcePositionMapper(getCombinedSourcemap.call(this))
-          : undefined;
-      const originalSource = await readFile(file, "utf8").catch(() => undefined);
-      const sourceIsOriginal = originalSource === code;
-
-      return injectJsxSourceMetadata(
-        code,
-        file,
-        configuredRoot,
-        sourceIsOriginal ? undefined : mapPosition,
-        sourceIsOriginal ? undefined : originalSource
-      );
+      this.addWatchFile(file);
+      const code = await readFile(file, "utf8").catch(() => undefined);
+      if (code === undefined) {
+        return null;
+      }
+      return path.extname(file).toLowerCase() === ".astro"
+        ? injectAstroSourceMetadata(code, file, configuredRoot)
+        : injectJsxSourceMetadata(code, file, configuredRoot);
     },
     configureServer(server) {
       server.middlewares.use(LOCATOR_ENDPOINT, (request, response, next) => {
@@ -230,6 +182,12 @@ export function createLocatorVitePlugin(
         LOCATOR_SESSION_ENDPOINT,
         (request, response, next) => {
           void sessionHandler(request, response, next).catch(next);
+        }
+      );
+      server.middlewares.use(
+        LOCATOR_ASSET_ENDPOINT,
+        (request, response, next) => {
+          void clientAssetHandler(request, response, next).catch(next);
         }
       );
 

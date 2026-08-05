@@ -25,7 +25,7 @@ describe("production output", () => {
     ).join("\n");
 
     expect(combined).not.toMatch(
-      /astro-inspector\/client|_astro-ai-locator\/register|data-astro-ai-locator/u
+      /astro-inspector\/client|@astro-inspector\/register|data-astro-ai-locator/u
     );
   });
 });

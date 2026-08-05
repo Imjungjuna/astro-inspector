@@ -24,6 +24,37 @@ interface OpeningElement {
   attributes: unknown[];
 }
 
+/**
+ * 주입 위치는 태그 종류에 따라 갈린다. 두 경로의 **덮어쓰기 방향이 반대**이기
+ * 때문이다.
+ *
+ * - intrinsic 태그(`<button>`)는 문자열 템플릿으로 렌더된다. spread 로 받은 속성과
+ *   여기서 주입한 속성이 HTML 에 둘 다 나가고, 중복 속성은 **먼저 나온 값**이 이긴다.
+ *   그래서 래퍼 자신의 좌표를 마지막 속성 **뒤**에 놓아야 호출부 좌표가 살아남는다.
+ * - 컴포넌트 태그(`<Wrapper>`)는 props **객체**로 병합된다. `{...props}` 가
+ *   **나중 키로 덮으므로** 주입은 태그명 바로 뒤, 즉 spread **앞**이어야 바깥 호출부가
+ *   이긴다.
+ *
+ * 두 규칙을 합치면 중첩 래퍼에서도 가장 바깥 호출부가 DOM 까지 살아 나온다
+ * (README Scope 의 "injected at the call site").
+ * 속성 끝 오프셋이라 `selfClosing` 의 `/>` 는 건드리지 않는다.
+ */
+function attributeInsertionOffset(
+  opening: OpeningElement,
+  isComponent: boolean
+): number {
+  let offset = opening.name.end;
+  if (isComponent) {
+    return offset;
+  }
+  for (const attribute of opening.attributes) {
+    if (isRecord(attribute) && typeof attribute.end === "number") {
+      offset = Math.max(offset, attribute.end);
+    }
+  }
+  return offset;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -211,7 +242,7 @@ export function injectAstroSourceMetadata(
       hasSourceTag ? "" : ` ${SOURCE_TAG_ATTRIBUTE}="${escapeAttribute(tag)}"`
     ].join("");
     output.appendLeft(
-      toUtf16(opening.name.end),
+      toUtf16(attributeInsertionOffset(opening, /^[A-Z_$]/u.test(tag))),
       attributes
     );
   }

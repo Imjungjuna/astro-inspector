@@ -222,13 +222,35 @@ start`를 분리하는 2단계 모델이 가장 명확하다.
 - production output에는 locator metadata와 client UI가 남지 않는다.
 - 모든 motion은 `prefers-reduced-motion`을 존중한다.
 
+### 8. leaf·호출부 동시 보고 (`data-astro-ai-locator-origin-*`) — 보류
+
+래퍼 hash 붕괴(2026-08-04)를 고치면서 검토했다가 접은 안이다. 컴포넌트 태그에는
+`origin-*` 이름으로 따로 주입하면 leaf 정의 위치와 호출부를 **둘 다** 들고 갈 수
+있다. manifest·MCP 응답·오버레이 복사가 두 지점을 함께 돌려주는 그림이다.
+
+지금 넣지 않은 이유:
+
+- 실제 버그는 "호출부가 사라진다" 였고, 그건 주입 위치 교정만으로 끝난다.
+- primary 속성의 의미가 호출부에서 leaf 로 뒤집힌다. `sourceTag→domTag` 라벨이
+  이미 "호출부 컴포넌트 → 렌더된 태그" 를 표현하도록 설계돼 있어 계약이 흔들린다.
+- 루트 밖 래퍼는 leaf 가 주입되지 않아 `origin-*` 만 남는다. 선택 selector·라벨·
+  등록 payload·manifest schemaVersion·MCP 툴 설명이 전부 따라 움직여야 한다.
+
+leaf 정의 위치를 실제로 요구하는 사용례가 생기면 그때 비파괴적으로 얹는다.
+
+### 9. 중복 속성 바이트 — 측정 후 판단
+
+forwarding 래퍼 한 단계마다 무시되는 `data-astro-ai-locator-*` 3개가 dev HTML 에
+남는다. spread 는 런타임에 풀리므로 컴파일 타임 dedup 은 불가능하고, 클라이언트
+dedup 은 이미 파서가 버린 값이라 의미가 없다. dev 전용이고 production 에는
+남지 않으므로 현재는 방치한다. 실제 페이지에서 문제될 만한 크기가 관측되면
+그때 다룬다.
+
 ## ⚠️ 현재 미검토·위험
 
-- 실제 소비 프로젝트에서 오늘의 마지막 `│` 라벨 변경 이후 수동 QA는
-  아직 이 문서 작성 시점에 기록되지 않았다.
-- package directory는 `/Users/jungjun`의 상위 Git 저장소에서 전체가
-  untracked 상태다. 현재 변경을 되돌릴 commit 기준점이 없으므로 npm
-  공식 배포 전에 독립 Git 저장소 생성 또는 정상 저장소 편입이 필요하다.
+- 실사용 레포 수동 QA 는 2026-08-03 기준 **아직 수행하지 않았다.** 0.2.0 에서 나온 세 건(클라이언트 격리,
+  프록시 경유 엔드포인트, 하이드레이션 경고)을 픽스처가 모두 놓쳤으므로, 0.3.0 배포 전에 실제 소비 레포에서
+  세 항목을 눈으로 확인해야 한다. 앞으로 실사용 경로에서만 재현되는 회귀는 픽스처에 합성 재현을 먼저 심는다.
 - compact token의 충돌 확률과 multi-project MCP 범위는 아직 설계·측정하지
   않았다.
 - true zero-load disable은 현재 runtime toggle의 작은 개선이 아니라

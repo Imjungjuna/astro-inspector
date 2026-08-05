@@ -1,6 +1,7 @@
-export const LOCATOR_ENDPOINT = "/_astro-ai-locator/register";
-export const LOCATOR_SETTINGS_ENDPOINT = "/_astro-ai-locator/settings";
-export const LOCATOR_SESSION_ENDPOINT = "/_astro-ai-locator/session";
+export const LOCATOR_ENDPOINT = "/@astro-inspector/register";
+export const LOCATOR_SETTINGS_ENDPOINT = "/@astro-inspector/settings";
+export const LOCATOR_SESSION_ENDPOINT = "/@astro-inspector/session";
+export const LOCATOR_ASSET_ENDPOINT = "/@astro-inspector";
 export const MANIFEST_DIRECTORY = ".astro-ai-locator";
 export const MANIFEST_FILENAME = "manifest.json";
 export const HASH_PREFIX = "astro_hash_";

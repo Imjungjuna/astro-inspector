@@ -1,6 +1,6 @@
 {
   "name": "astro-inspector",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Select Astro UI elements in the browser and resolve them through MCP.",
   "packageManager": "npm@11.6.2",
   "repository": {
@@ -31,10 +31,11 @@
   },
   "files": [
     "dist",
+    "src",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run tests/unit",
     "test:coverage": "vitest run tests/unit --coverage",
@@ -56,7 +57,6 @@
   "dependencies": {
     "@astrojs/compiler-rs": "^0.3.1",
     "@babel/parser": "^7.29.7",
-    "@jridgewell/trace-mapping": "^0.3.31",
     "@modelcontextprotocol/sdk": "1.30.0",
     "magic-string": "^0.30.21",
     "zod": "^4.2.0"

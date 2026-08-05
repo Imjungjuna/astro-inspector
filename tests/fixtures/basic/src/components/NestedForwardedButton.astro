@@ -1,0 +1,10 @@
+---
+import LocalForwardedButton from "./LocalForwardedButton.astro";
+
+/** 래퍼가 래퍼를 감싸는 경우. 세 지점의 좌표가 한 `<button>` 에 모인다. */
+const props = Astro.props;
+---
+
+<LocalForwardedButton {...props}>
+  <slot />
+</LocalForwardedButton>

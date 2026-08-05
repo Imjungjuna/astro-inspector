@@ -251,6 +251,7 @@ Full file contents are **never** included in the MCP response. The connected CLI
 
 In dev mode the Astro integration installs a Vite plugin and a small browser client.
 
+0. **Serve.** The integration serves its own browser client from `/@astro-inspector/client/` and injects a single `head-inline` script tag pointing at it. It never shares a module with other integrations' page scripts, so a failing import elsewhere on the page cannot stop the locator from installing.
 1. **Inject.** Before Astro/React compilation, the plugin adds source-location attributes to `.astro`, `.tsx`, and `.jsx` tags inside the project root. These `data-*` attributes survive into the real DOM, including after React islands hydrate.
 2. **Select.** The browser posts the chosen location to an authenticated local dev endpoint.
 3. **Hash.** The server derives a deterministic hash and records it in a manifest.
@@ -271,6 +272,22 @@ The result: visible overlays remain selectable, stretched pseudo-elements do not
 | All trackable elements | Faint grey dotted outline |
 | Nearest ancestor with metadata | 2px purple solid outline at 40% opacity, no fill, no label, drawn 2px outside the ancestor box so the current boundary never covers it |
 | Current target | 2px purple solid outline with a 10% fill, plus the hover label |
+
+### Wrappers
+
+A shared wrapper — `<Link>`, `<Button>`, a card shell — renders someone else's markup. The element you point at is defined in the wrapper, but the line you want to edit is almost always the call site. The locator always answers with the **outermost call site** that reaches the element.
+
+That takes two opposite injection rules, because the two Astro render paths overwrite in opposite directions:
+
+| Tag | Rendered as | Duplicate winner | Metadata goes |
+| --- | --- | --- | --- |
+| `<button>`, `<div>` — intrinsic | HTML string | first attribute in the tag | after the author's attributes, so a forwarded `{...props}` stays ahead of it |
+| `<Wrapper>` — component | props object | last key in the object | right after the tag name, so a forwarded `{...props}` overwrites it |
+
+Consequences worth knowing:
+
+- A wrapper that does **not** forward its props resolves to its own definition. The call site cannot reach the DOM at all.
+- Each forwarding hop leaves one ignored duplicate set of `data-astro-ai-locator-*` attributes in the dev HTML. Spreads are resolved at runtime, so they cannot be de-duplicated at compile time. Dev only — production builds carry none of it.
 
 ### Hash stability
 
@@ -304,7 +321,7 @@ The browser never touches this file directly. On page load the client makes one 
 | --- | --- |
 | ✅ `.astro` templates | Full source tracking |
 | ✅ React `.tsx` / `.jsx` in the project root | Including nested JSX inside `client:load`, `client:only="react"`, and other hydrated islands |
-| ✅ Astro/React component call sites | Metadata is injected at the call site; selectable when the component forwards its received `data-*` props to a real DOM root |
+| ✅ Astro/React component call sites | Metadata is injected at the call site; selectable when the component forwards its received `data-*` props to a real DOM root. Nested wrappers resolve to the outermost call site — see [Wrappers](#wrappers) |
 | ⚠️ Monorepo UI packages outside the project root | Source is not transformed. Only components that forward `data-*` props to the DOM are selectable, and they resolve to the in-app call site |
 | ❌ Vue, Svelte, and other framework islands | Fine-grained source tracking inside them is not supported yet |
 
@@ -321,9 +338,11 @@ Additional constraints:
 
 ## Security
 
-**Dev endpoints** require a token that is regenerated for every process. The session endpoint reports whether the locator was closed and returns the MCP command for this project; it is the one place an absolute path reaches the browser, and it is never stored in the DOM, manifest, MCP result, or settings. The element-registration endpoint caps the request body and the source file size, and accepts only real `.astro` / `.tsx` / `.jsx` files inside the project root at valid line and column positions. The workspace-relative path used by Context copy is derived from Vite's detected workspace root only after that validation; it is returned to the authenticated browser for the current click and is not stored in the DOM, manifest, MCP result, or settings. The settings endpoint validates allowlisted trigger keys, color presets, parent levels, copy modes, context fields, Location/Line dependencies, and Location formats before an atomic write.
+**Dev endpoints** require a token that is regenerated for every process. The session endpoint reports whether the locator was closed and returns the MCP command for this project; it is the one place an absolute path reaches the browser, and it is never stored in the DOM, manifest, MCP result, or settings. Dev endpoints live under `/@astro-inspector/`. The `/@` prefix is what Vite reserves for its own internal requests, so proxies that already forward Vite traffic by path reach them without extra configuration. The element-registration endpoint caps the request body and the source file size, and accepts only real `.astro` / `.tsx` / `.jsx` files inside the project root at valid line and column positions. The workspace-relative path used by Context copy is derived from Vite's detected workspace root only after that validation; it is returned to the authenticated browser for the current click and is not stored in the DOM, manifest, MCP result, or settings. The settings endpoint validates allowlisted trigger keys, color presets, parent levels, copy modes, context fields, Location/Line dependencies, and Location formats before an atomic write.
 
 **The MCP server** normalizes both manifest and source paths with `realpath`, blocking path traversal and symlink escapes. On stdio, `stdout` carries the MCP protocol only — all diagnostics go to `stderr`.
+
+**The asset endpoint** (`/@astro-inspector/client/…`) carries no token — a `<script src>` cannot send headers — so it serves only the browser-facing `dist/client/**` and `dist/shared/**` trees and nothing else in the package.
 
 ---
 
