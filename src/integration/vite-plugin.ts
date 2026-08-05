@@ -21,6 +21,7 @@ import { injectAstroSourceMetadata } from "./inject-source-metadata.js";
 import { injectJsxSourceMetadata } from "./inject-jsx-source-metadata.js";
 import { createRegistrationHandler } from "./request-handler.js";
 import { createSessionHandler } from "./session-handler.js";
+import { createSessionState, type LocatorSessionStateStore } from "./session-state.js";
 import { createSettingsHandler } from "./settings-handler.js";
 
 const MCP_BIN_NAME = "astro-inspector-mcp";
@@ -57,6 +58,7 @@ interface LocatorVitePluginOptions {
   sessionToken: string;
   store?: ManifestStore;
   settingsStore?: LocatorSettingsStore;
+  session?: LocatorSessionStateStore;
 }
 
 const SOURCE_EXTENSIONS = new Set([".astro", ".jsx", ".tsx"]);
@@ -108,9 +110,11 @@ export function createLocatorVitePlugin(
     sessionToken: options.sessionToken,
     store: settingsStore
   });
+  const session = options.session ?? createSessionState();
   const sessionHandler = createSessionHandler({
     ...resolveMcpCommand(configuredRoot, workspaceRoot),
-    sessionToken: options.sessionToken
+    sessionToken: options.sessionToken,
+    state: session
   });
   // dist/integration/vite-plugin.js 기준 한 단계 위가 dist 루트다.
   const distDirectory = fileURLToPath(new URL("..", import.meta.url));

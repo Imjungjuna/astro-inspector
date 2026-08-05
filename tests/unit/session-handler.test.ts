@@ -1,14 +1,16 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { describe, expect, it } from "vitest";
 import { createSessionHandler } from "../../src/integration/session-handler.js";
+import { createSessionState } from "../../src/integration/session-state.js";
 
 const TOKEN = "session-token";
 
-function createHandler() {
+function createHandler(state = createSessionState()) {
   return createSessionHandler({
     mcpCommand: "/project/node_modules/.bin/astro-inspector-mcp",
     mcpArgs: ["--project-root", "/project"],
-    sessionToken: TOKEN
+    sessionToken: TOKEN,
+    state
   });
 }
 
@@ -84,5 +86,15 @@ describe("createSessionHandler", () => {
     await handler(reload.request, reload.response, () => {});
 
     expect(reload.read().disabled).toBe(true);
+  });
+
+  it("reports the shared state that the plugin also reads", async () => {
+    const state = createSessionState();
+    const handler = createHandler(state);
+    const quit = createExchange("POST", TOKEN);
+
+    await handler(quit.request, quit.response, () => {});
+
+    expect(state.isDisabled()).toBe(true);
   });
 });
