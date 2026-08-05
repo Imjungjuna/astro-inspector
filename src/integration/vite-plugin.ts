@@ -6,7 +6,7 @@ import { searchForWorkspaceRoot, type Plugin } from "vite";
 import {
   normalizeRelativeFile,
   toProjectRelativeFile
-} from "../manifest/hash.js";
+} from "../manifest/paths.js";
 import { ManifestStore } from "../manifest/store.js";
 import { LocatorSettingsStore } from "../settings/store.js";
 import {

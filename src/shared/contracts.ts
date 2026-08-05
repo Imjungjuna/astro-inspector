@@ -4,7 +4,8 @@ export const LOCATOR_SESSION_ENDPOINT = "/@astro-inspector/session";
 export const LOCATOR_ASSET_ENDPOINT = "/@astro-inspector";
 export const MANIFEST_DIRECTORY = ".astro-ai-locator";
 export const MANIFEST_FILENAME = "manifest.json";
-export const HASH_PREFIX = "astro_hash_";
+export const TOKEN_PREFIX = "#a";
+export const TOKEN_PATTERN = /^#a[0-9a-z]{3}$/;
 export const SOURCE_FILE_ATTRIBUTE = "data-astro-ai-locator-file";
 export const SOURCE_LOCATION_ATTRIBUTE = "data-astro-ai-locator-loc";
 export const SOURCE_TAG_ATTRIBUTE = "data-astro-ai-locator-source-tag";
@@ -46,7 +47,7 @@ export interface LocatorManifestEntry {
 }
 
 export interface LocatorManifest {
-  schemaVersion: 1;
+  schemaVersion: 2;
   entries: Record<string, LocatorManifestEntry>;
 }
 
@@ -59,7 +60,7 @@ export interface RegisterElementRequest {
 }
 
 export interface RegisterElementResponse {
-  hash: string;
+  token: string;
   entry: LocatorManifestEntry;
   workspaceFile: string;
 }

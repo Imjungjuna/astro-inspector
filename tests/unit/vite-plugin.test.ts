@@ -174,21 +174,21 @@ describe("createLocatorVitePlugin", () => {
 
   it("invalidates only entries for the changed Astro file", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
-    const store = new ManifestStore(root);
+    const store = new ManifestStore(root, { startIndex: 0 });
     const plugin = createLocatorVitePlugin({
       root,
       sessionToken: "session-token",
       store
     });
     await store.reset();
-    await store.upsert("astro_hash_aaaaaaaaaaaaaaaaaaaaaaaa", {
+    await store.issue({
       file: "src/Card.astro",
       line: 1,
       column: 1,
       sourceTag: "article",
       domTag: "article"
     });
-    await store.upsert("astro_hash_bbbbbbbbbbbbbbbbbbbbbbbb", {
+    const kept = await store.issue({
       file: "src/Header.astro",
       line: 1,
       column: 1,
@@ -205,21 +205,19 @@ describe("createLocatorVitePlugin", () => {
       { file: path.join(root, "src", "Card.astro") } as HmrContext
     );
 
-    expect(Object.keys((await store.readSnapshot()).entries)).toEqual([
-      "astro_hash_bbbbbbbbbbbbbbbbbbbbbbbb"
-    ]);
+    expect(Object.keys((await store.readSnapshot()).entries)).toEqual([kept]);
   });
 
   it("invalidates entries for a changed TSX source file", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
-    const store = new ManifestStore(root);
+    const store = new ManifestStore(root, { startIndex: 0 });
     const plugin = createLocatorVitePlugin({
       root,
       sessionToken: "session-token",
       store
     });
     await store.reset();
-    await store.upsert("astro_hash_aaaaaaaaaaaaaaaaaaaaaaaa", {
+    await store.issue({
       file: "src/Button.tsx",
       line: 1,
       column: 29,

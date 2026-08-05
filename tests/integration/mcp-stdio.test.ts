@@ -13,10 +13,9 @@ describe("stdio MCP server", () => {
     const sourceFile = path.join(root, "src", "Card.astro");
     await mkdir(path.dirname(sourceFile), { recursive: true });
     await writeFile(sourceFile, "<article>Card</article>\n", "utf8");
-    const hash = "astro_hash_aaaaaaaaaaaaaaaaaaaaaaaa";
-    const store = new ManifestStore(root);
+    const store = new ManifestStore(root, { startIndex: 0 });
     await store.reset();
-    await store.upsert(hash, {
+    const hash = await store.issue({
       file: "src/Card.astro",
       line: 1,
       column: 1,

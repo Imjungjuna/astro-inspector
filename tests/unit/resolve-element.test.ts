@@ -21,10 +21,9 @@ describe("resolveElementByHash", () => {
       "---\nconst title = 'Card';\n---\n<article>{title}</article>\n",
       "utf8"
     );
-    const hash = "astro_hash_aaaaaaaaaaaaaaaaaaaaaaaa";
-    const store = new ManifestStore(root);
+    const store = new ManifestStore(root, { startIndex: 0 });
     await store.reset();
-    await store.upsert(hash, {
+    const hash = await store.issue({
       file: "src/Card.astro",
       line: 4,
       column: 1,
@@ -46,10 +45,9 @@ describe("resolveElementByHash", () => {
     const file = path.join(root, "src", "Button.tsx");
     await mkdir(path.dirname(file), { recursive: true });
     await writeFile(file, "export const Button = () => <button />;\n", "utf8");
-    const hash = "astro_hash_999999999999999999999999";
-    const store = new ManifestStore(root);
+    const store = new ManifestStore(root, { startIndex: 0 });
     await store.reset();
-    await store.upsert(hash, {
+    const hash = await store.issue({
       file: "src/Button.tsx",
       line: 1,
       column: 29,
@@ -67,7 +65,7 @@ describe("resolveElementByHash", () => {
 
   it("rejects an unknown hash", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
-    const store = new ManifestStore(root);
+    const store = new ManifestStore(root, { startIndex: 0 });
     await store.reset();
 
     await expect(
@@ -83,10 +81,9 @@ describe("resolveElementByHash", () => {
     const outside = await mkdtemp(path.join(os.tmpdir(), "outside-"));
     const outsideFile = path.join(outside, "Escape.astro");
     await writeFile(outsideFile, "<div>Escape</div>\n", "utf8");
-    const hash = "astro_hash_cccccccccccccccccccccccc";
-    const store = new ManifestStore(root);
+    const store = new ManifestStore(root, { startIndex: 0 });
     await store.reset();
-    await store.upsert(hash, {
+    const hash = await store.issue({
       file: path.relative(root, outsideFile),
       line: 1,
       column: 1,
@@ -109,10 +106,9 @@ describe("resolveElementByHash", () => {
       const sourceDirectory = path.join(root, "src");
       await mkdir(sourceDirectory, { recursive: true });
       await symlink(outsideFile, path.join(sourceDirectory, "Linked.astro"));
-      const hash = "astro_hash_dddddddddddddddddddddddd";
-      const store = new ManifestStore(root);
+      const store = new ManifestStore(root, { startIndex: 0 });
       await store.reset();
-      await store.upsert(hash, {
+      const hash = await store.issue({
         file: "src/Linked.astro",
         line: 1,
         column: 1,
@@ -134,7 +130,7 @@ describe("resolveElementByHash", () => {
       const outsideManifest = path.join(outside, "manifest.json");
       await writeFile(
         outsideManifest,
-        '{"schemaVersion":1,"entries":{}}\n',
+        '{"schemaVersion":2,"entries":{}}\n',
         "utf8"
       );
       const manifestDirectory = path.join(root, ".astro-ai-locator");
@@ -158,10 +154,9 @@ describe("resolveElementByHash", () => {
     const source = path.join(root, "src", "Large.astro");
     await mkdir(path.dirname(source), { recursive: true });
     await writeFile(source, "x".repeat(512 * 1024 + 1), "utf8");
-    const hash = "astro_hash_eeeeeeeeeeeeeeeeeeeeeeee";
-    const store = new ManifestStore(root);
+    const store = new ManifestStore(root, { startIndex: 0 });
     await store.reset();
-    await store.upsert(hash, {
+    const hash = await store.issue({
       file: "src/Large.astro",
       line: 1,
       column: 1,
@@ -176,7 +171,7 @@ describe("resolveElementByHash", () => {
 
   it("rejects a malformed manifest", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
-    const store = new ManifestStore(root);
+    const store = new ManifestStore(root, { startIndex: 0 });
     await store.reset();
     await writeFile(store.manifestPath, "{}\n", "utf8");
 

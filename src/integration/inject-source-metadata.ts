@@ -1,7 +1,7 @@
 import path from "node:path";
 import { parse } from "@astrojs/compiler-rs";
 import MagicString, { type SourceMap } from "magic-string";
-import { normalizeRelativeFile } from "../manifest/hash.js";
+import { normalizeRelativeFile } from "../manifest/paths.js";
 import {
   SOURCE_FILE_ATTRIBUTE,
   SOURCE_LOCATION_ATTRIBUTE,

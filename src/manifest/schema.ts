@@ -1,4 +1,5 @@
 import * as z from "zod/v4";
+import { TOKEN_PATTERN } from "../shared/contracts.js";
 
 const SourceTagSchema = z
   .string()
@@ -19,9 +20,9 @@ export const LocatorManifestEntrySchema = z
 
 export const LocatorManifestSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(2),
     entries: z.record(
-      z.string().regex(/^astro_hash_[a-f0-9]{24}$/),
+      z.string().regex(TOKEN_PATTERN),
       LocatorManifestEntrySchema
     )
   })

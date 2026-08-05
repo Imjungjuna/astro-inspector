@@ -2,6 +2,7 @@ import {
   SOURCE_FILE_ATTRIBUTE,
   SOURCE_LOCATION_ATTRIBUTE,
   SOURCE_TAG_ATTRIBUTE,
+  TOKEN_PATTERN,
   type LocatorClientOptions,
   type LocatorSessionState,
   type LocatorSettings,
@@ -477,7 +478,7 @@ function installReadyLocator(
       }
       const result = (await response.json()) as RegisterElementResponse;
       if (
-        !/^astro_hash_[a-f0-9]{24}$/u.test(result.hash) ||
+        !TOKEN_PATTERN.test(result.token) ||
         !result.entry ||
         typeof result.entry.file !== "string" ||
         !Number.isInteger(result.entry.line) ||
@@ -490,7 +491,7 @@ function installReadyLocator(
       ) {
         throw new Error("Registration returned invalid locator data");
       }
-      target.setAttribute("data-comp-hash", result.hash);
+      target.setAttribute("data-comp-token", result.token);
       const clipboardPayload = formatClipboardPayload(
         result,
         currentSettings
@@ -499,18 +500,18 @@ function installReadyLocator(
       try {
         await copyText(clipboardPayload);
         overlay.toast(
-          copyingContext ? "Copied context" : `Copied ${result.hash}`
+          copyingContext ? "Copied context" : `Copied ${result.token}`
         );
       } catch {
         window.prompt(
           copyingContext
             ? "Copy Astro locator context:"
-            : "Copy Astro locator hash:",
+            : "Copy Astro locator token:",
           clipboardPayload
         );
         overlay.toast(
           `Clipboard was blocked; ${
-            copyingContext ? "context" : "hash"
+            copyingContext ? "context" : "token"
           } opened for manual copy`
         );
       }

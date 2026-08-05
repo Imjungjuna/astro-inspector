@@ -7,7 +7,7 @@ import type {
 } from "../../src/shared/contracts.js";
 
 const registration: RegisterElementResponse = {
-  hash: "astro_hash_8f92abcdef0123456789abcd",
+  token: "#a7k9",
   entry: {
     file: "src/components/HospitalListCard.tsx",
     line: 298,
@@ -35,13 +35,13 @@ function contextSettings(
 }
 
 describe("formatClipboardPayload", () => {
-  it("returns only the exact hash in Hash mode", () => {
+  it("returns only the exact token in Hash mode", () => {
     expect(
       formatClipboardPayload(registration, {
         ...contextSettings(["tag", "location", "line"], "moduleName"),
         copyMode: "hash"
       })
-    ).toBe("astro_hash_8f92abcdef0123456789abcd");
+    ).toBe("#a7k9");
   });
 
   it("formats one tag when source and DOM tags match", () => {
