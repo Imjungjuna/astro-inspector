@@ -2,7 +2,37 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { ManifestStore } from "../../src/manifest/store.js";
+import { ManifestStore, hashToToken } from "../../src/manifest/store.js";
+import type { LocatorManifestEntry } from "../../src/shared/contracts.js";
+
+/**
+ * 토큰 공간은 base36 3자(46,656)뿐이라 서로 다른 요소가 같은 토큰으로 떨어질 수
+ * 있다. 자연 발생하는 첫 충돌 쌍을 찾아 그 쌍으로 검증한다. SHA-256 이 결정적이라
+ * 이 탐색도 매 실행 같은 쌍을 돌려준다.
+ */
+async function findCollidingEntries(): Promise<
+  [LocatorManifestEntry, LocatorManifestEntry]
+> {
+  const byToken = new Map<string, LocatorManifestEntry>();
+  for (let index = 0; index < 20_000; index += 1) {
+    const entry: LocatorManifestEntry = {
+      file: `src/f${index}.astro`,
+      line: 1,
+      column: 1,
+      sourceTag: "div",
+      domTag: "div"
+    };
+    const token = await hashToToken(
+      [entry.file, "1", "1", entry.sourceTag, "0"].join("\0")
+    );
+    const previous = byToken.get(token);
+    if (previous) {
+      return [previous, entry];
+    }
+    byToken.set(token, entry);
+  }
+  throw new Error("No token collision found in the search range");
+}
 
 function entryFor(index: number, file = "src/Card.astro") {
   return {
@@ -155,6 +185,30 @@ describe("ManifestStore.issue", () => {
 
     expect(first).not.toBe(third);
     expect(firstAgain).toBe(first);
+  });
+
+  it("gives colliding identities distinct tokens", async () => {
+    const store = await createStore();
+    const [first, second] = await findCollidingEntries();
+
+    const firstToken = await store.issue(first);
+    const secondToken = await store.issue(second);
+
+    expect(firstToken).not.toBe(secondToken);
+    const { entries } = await store.readSnapshot();
+    // 덮어쓰기가 아니라 둘 다 살아야 한다. 하나가 사라지면 그 토큰은 조용히
+    // 다른 요소의 위치를 답하게 된다.
+    expect(entries[firstToken]).toMatchObject({ file: first.file });
+    expect(entries[secondToken]).toMatchObject({ file: second.file });
+  });
+
+  it("keeps a probed token stable when the same element is clicked again", async () => {
+    const store = await createStore();
+    const [first, second] = await findCollidingEntries();
+    await store.issue(first);
+    const secondToken = await store.issue(second);
+
+    expect(await store.issue(second)).toBe(secondToken);
   });
 
   it("keeps one token for an element with no instance information", async () => {

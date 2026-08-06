@@ -1,8 +1,19 @@
+import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod/v4";
 import { TOKEN_PATTERN } from "../shared/contracts.js";
 import { resolveElementByToken } from "./resolve-element.js";
+
+/**
+ * MCP 핸드셰이크로 호스트에 보고되는 버전. 상수로 복제하면 릴리스마다 손으로
+ * 맞춰야 하고 실제로 0.4.0 에서 멈춰 있었다. `rootDir` 이 src 라 JSON import 는
+ * 빌드가 거부하므로 런타임에 읽는다. `dist/mcp/` 와 `src/mcp/` 모두 두 단계 위가
+ * 패키지 루트다.
+ */
+const { version } = createRequire(import.meta.url)("../../package.json") as {
+  version: string;
+};
 
 interface McpServerOptions {
   projectRoot: string;
@@ -18,7 +29,7 @@ function toolError(message: string): CallToolResult {
 export function createMcpServer(options: McpServerOptions): McpServer {
   const server = new McpServer({
     name: "astro-inspector",
-    version: "0.4.0"
+    version
   });
 
   server.registerTool(
