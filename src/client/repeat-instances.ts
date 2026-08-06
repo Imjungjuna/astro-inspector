@@ -3,7 +3,7 @@
  * DOM 을 직접 만지지 않는 순수 함수다 — 유닛 테스트가 node 환경에서 돌기 때문이고,
  * 수집·조상 연결 같은 DOM 작업은 호출부(client/index.ts)가 맡는다.
  */
-export const INSTANCE_LABEL_MAX = 40;
+import { INSTANCE_LABEL_MAX } from "../shared/contracts.js";
 
 export interface RepeatCandidate {
   /** file + loc + sourceTag 를 합친 값. 같으면 같은 호출부다. */
@@ -46,7 +46,7 @@ export function resolveRepeatInstances(
     let current: number | null = index;
     while (current !== null && !visited.has(current)) {
       visited.add(current);
-      const candidate = candidates[current];
+      const candidate: RepeatCandidate | undefined = candidates[current];
       if (!candidate) {
         break;
       }

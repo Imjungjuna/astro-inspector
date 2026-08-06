@@ -26,7 +26,9 @@ function identityOf(entry: LocatorManifestEntry): string {
     entry.file,
     String(entry.line),
     String(entry.column),
-    entry.sourceTag
+    entry.sourceTag,
+    // 인스턴스가 없는 요소는 예전과 같은 신원을 유지해야 하므로 0 으로 채운다.
+    String(entry.instance ?? 0)
   ].join("\0");
 }
 
@@ -57,7 +59,8 @@ export class ManifestStore {
   }
 
   /**
-   * Returns the same token for the same element (file+line+column+sourceTag).
+   * Returns the same token for the same element
+   * (file+line+column+sourceTag+instance).
    * Deterministic hash means no collisions within a session, and no exhaustion.
    * The token is stable across page reloads as long as the source doesn't move.
    */
@@ -114,7 +117,7 @@ export class ManifestStore {
 
   private persist(): Promise<void> {
     const snapshot: LocatorManifest = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       entries: Object.fromEntries(
         [...this.entries.entries()].sort(([left], [right]) =>
           left.localeCompare(right)

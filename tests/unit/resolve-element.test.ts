@@ -196,7 +196,7 @@ describe("resolveElementByToken", () => {
     await writeFile(
       path.join(root, ".astro-ai-locator", "manifest.json"),
       JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         entries: {
           "#a000": {
             file: "src/Card.astro",

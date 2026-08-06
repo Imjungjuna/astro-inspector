@@ -127,7 +127,15 @@ export function createRegistrationHandler(
         line: input.line,
         column: input.column,
         sourceTag: input.sourceTag,
-        domTag: input.domTag.toLowerCase()
+        domTag: input.domTag.toLowerCase(),
+        // 반복 항목에서만 온다. 없을 때 키를 심으면 `exactOptionalPropertyTypes`
+        // 아래에서 타입이 깨지고, 토큰 신원도 달라진다.
+        ...(input.instance === undefined
+          ? {}
+          : {
+              instance: input.instance,
+              instanceLabel: input.instanceLabel ?? ""
+            })
       };
       const token = await options.store.issue(entry);
       response.statusCode = 200;
