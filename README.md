@@ -157,10 +157,10 @@ Three controls sit below the preference rows.
 | Button | What it does |
 | --- | --- |
 | eye-off icon | Hides the fox button for this page only — see [Closing the locator](#closing-the-locator) |
-| `Quit Extension` | Closes the locator for this dev server |
-| `Copy MCP Prompt` | Copies a setup message for your AI agent — see [MCP setup](#mcp-setup) |
+| `Quit` | Closes the locator for this dev server |
+| `MCP Prompt` | Copies a setup message for your AI agent — see [MCP setup](#mcp-setup) |
 
-`Copy MCP Prompt` takes the active overlay color as its background, so it
+`MCP Prompt` takes the active overlay color as its background, so it
 follows whatever preset is selected.
 
 ### Closing the locator
@@ -169,7 +169,7 @@ There are two ways out, and they differ in how far they reach.
 
 **Hide** — the eye-off icon removes the fox button and its popover from the current page. Nothing else changes: hold the trigger key and selection still works. Nothing is sent to the dev server and nothing is stored, so a reload brings the button back.
 
-**Quit Extension** — removes every listener, the overlay, and the fox button, then confirms with a short toast. The dev server records the choice in memory for the rest of the process, so **reloading the page does not bring the locator back**, and from that point it also stops instrumenting source files: `.astro`, `.tsx`, and `.jsx` are served as written, the registration endpoint answers `410`, and the watcher's unlink cleanup listener is detached (the `handleHotUpdate` hook that keeps the manifest fresh on edits keeps running — harmless, since it has nothing left to drain). Already-compiled modules are dropped from the module graph without pushing an HMR update, so the tab you are looking at keeps its state and the next navigation is clean.
+**Quit** — removes every listener, the overlay, and the fox button, then confirms with a short toast. The dev server records the choice in memory for the rest of the process, so **reloading the page does not bring the locator back**, and from that point it also stops instrumenting source files: `.astro`, `.tsx`, and `.jsx` are served as written, the registration endpoint answers `410`, and the watcher's unlink cleanup listener is detached (the `handleHotUpdate` hook that keeps the manifest fresh on edits keeps running — harmless, since it has nothing left to drain). Already-compiled modules are dropped from the module graph without pushing an HMR update, so the tab you are looking at keeps its state and the next navigation is clean.
 
 One thing survives: the small client script tag. Astro injects it when the dev server starts and there is no way to withdraw it mid-run, so each page still fetches the client asset and asks the session endpoint once, then shuts itself down. A fully zero-load dev server needs a restart, which is also the only way to bring the locator back. Nothing is written to disk — the choice never outlives the process that received it. Other tabs already open keep working until the next Alt-click, when the registration endpoint answers `410` and they shut themselves down the same way this tab did.
 
@@ -189,7 +189,7 @@ integrations: [astroInspector({ showAllBoundaries: false })]
 
 ### The short way
 
-Run `astro dev`, open the fox popover, and press `Copy MCP Prompt`. That copies
+Run `astro dev`, open the fox popover, and press `MCP Prompt`. That copies
 a message written for an AI agent, with the absolute paths for this project
 already filled in. Paste it into any MCP-connected agent and it does the setup.
 
@@ -329,7 +329,7 @@ The browser never touches this file directly. On page load the client makes one 
 Additional constraints:
 
 - **Dev mode only.** Production builds receive no client, no endpoint, and no source metadata.
-- `Quit Extension` lasts for the life of the dev server process. There is no in-page way back — restart `astro dev`.
+- `Quit` lasts for the life of the dev server process. There is no in-page way back — restart `astro dev`.
 - If clipboard permission is denied, the client falls back to a browser prompt
   containing the exact Hash or Context payload for manual copy.
 - Key combinations the browser never delivers to the page — OS-reserved `Command/Meta` shortcuts, for example — cannot be intercepted.

@@ -89,7 +89,7 @@ async function mockSessionEndpoint(page: Page) {
   return { isDisabled: () => disabled };
 }
 
-test("Quit Extension closes the locator until the dev server restarts", async ({
+test("Quit closes the locator until the dev server restarts", async ({
   page
 }) => {
   await mockSettingsEndpoint(page);
@@ -159,7 +159,7 @@ test("Hide removes the button for this page but keeps the locator working", asyn
   await expect(page.locator("[data-astro-ai-locator-launcher]")).toBeVisible();
 });
 
-test("Copy MCP Prompt puts an agent-ready setup message on the clipboard", async ({
+test("MCP Prompt puts an agent-ready setup message on the clipboard", async ({
   page
 }) => {
   await mockSettingsEndpoint(page);
@@ -171,18 +171,28 @@ test("Copy MCP Prompt puts an agent-ready setup message on the clipboard", async
   // Located by attribute, not accessible name: the label itself is asserted
   // below and a name-based locator would stop matching when it flips.
   const copyButton = page.locator("[data-ui-copy-mcp]");
-  await expect(copyButton).toHaveText("Copy MCP Prompt");
+  await expect(copyButton).toHaveText("MCP Prompt");
 
   // Quit sits left of Copy, and Copy carries the active overlay color.
   await expect(page.locator(".footer .footer-button")).toHaveText([
     "",
-    "Quit Extension",
-    "Copy MCP Prompt"
+    "Quit",
+    "MCP Prompt"
   ]);
   await expect(page.locator("[data-ui-hide]")).toHaveAttribute(
     "aria-label",
     "Hide the button until reload"
   );
+  // 아이콘이 28px 칸을 가져간 뒤로 남은 폭이 좁다. 버튼은 nowrap 이고 `1fr` 칸은
+  // 콘텐츠만큼 늘어나므로, 라벨이 길면 버튼이 아니라 **푸터가** 팝오버 밖으로 넘친다.
+  // 실측: `Copy MCP Prompt` 이던 시절 footer 는 274px 로 258px 팝오버를 14px 넘겼다.
+  const footerFit = await page
+    .locator("[data-astro-ai-locator-popover] .footer")
+    .evaluate((footer) => ({
+      scrollWidth: footer.scrollWidth,
+      clientWidth: footer.clientWidth
+    }));
+  expect(footerFit.scrollWidth).toBeLessThanOrEqual(footerFit.clientWidth);
   await expect(copyButton).toHaveCSS("background-color", "rgb(124, 58, 237)");
 
   await copyButton.click();
@@ -206,7 +216,7 @@ test("Copy MCP Prompt puts an agent-ready setup message on the clipboard", async
     }
   });
 
-  await expect(copyButton).toHaveText("Copy MCP Prompt");
+  await expect(copyButton).toHaveText("MCP Prompt");
 });
 
 test("Alt hover reveals the page map, annotated parent, current target, and structured label", async ({

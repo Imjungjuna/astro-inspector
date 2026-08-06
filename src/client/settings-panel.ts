@@ -668,10 +668,10 @@ export function createSettingsPanel(
           title="Hide the button until reload"
         >${HIDE_MARK_SVG}</button>
         <button class="footer-button" type="button" data-ui-quit>
-          Quit Extension
+          Quit
         </button>
         <button class="footer-button" type="button" data-ui-copy-mcp>
-          Copy MCP Prompt
+          MCP Prompt
         </button>
       </div>
     </section>
@@ -1183,7 +1183,7 @@ export function createSettingsPanel(
       window.clearTimeout(copyLabelTimer);
       copyMcpButton.textContent = "Copied ✓";
       copyLabelTimer = window.setTimeout(() => {
-        copyMcpButton.textContent = "Copy MCP Prompt";
+        copyMcpButton.textContent = "MCP Prompt";
       }, COPY_FEEDBACK_MS);
     });
   });

@@ -629,7 +629,7 @@ export function installLocator(options: LocatorClientOptions): () => void {
     if (disposed || window.__astroAiLocatorCleanup !== cleanup) {
       return;
     }
-    // Quit Extension is per dev server process, so a reload keeps it closed.
+    // Quit is per dev server process, so a reload keeps it closed.
     if (sessionState?.disabled) {
       cleanup();
       return;

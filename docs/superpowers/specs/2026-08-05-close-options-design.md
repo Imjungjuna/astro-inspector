@@ -71,7 +71,7 @@ dev 실행 중에 회수할 방법이 없다. Quit 후에도 페이지마다 클
 ```
 footer: grid-template-columns 28px 1fr 1fr
 
-[eye-off]  [Quit Extension]  [Copy MCP Prompt]
+[eye-off]  [Quit]  [MCP Prompt]
 ```
 
 - 아이콘은 eye-off SVG. `client/fox-mark.ts` 옆에 `client/hide-mark.ts` 로 둔다.
