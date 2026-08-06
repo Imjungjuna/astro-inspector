@@ -1723,8 +1723,12 @@ test("Copy As defaults to Hash between Trigger and Preferences", async ({
   const triggerBox = await triggerChoice.boundingBox();
   const hashBox = await hashMode.boundingBox();
   const contextBox = await contextMode.boundingBox();
-  expect(hashBox?.width).toBeCloseTo(triggerBox?.width ?? 0, 0);
-  expect(contextBox?.width).toBeCloseTo(triggerBox?.width ?? 0, 0);
+  // 의도는 "세 행이 같은 폭"이다. `toBeCloseTo(_, 0)` 은 차이 < 0.5 를 요구하는데
+  // 서브픽셀 렌더가 정확히 0.5 로 떨어져 전체 스위트에서만 간헐적으로 깨졌다
+  // (단독 실행은 통과). 1px 미만이면 육안상 같은 폭이므로 그대로 어서션한다.
+  const triggerWidth = triggerBox?.width ?? 0;
+  expect(Math.abs((hashBox?.width ?? 0) - triggerWidth)).toBeLessThan(1);
+  expect(Math.abs((contextBox?.width ?? 0) - triggerWidth)).toBeLessThan(1);
 });
 
 test("Copy As changes show copy-specific feedback", async ({ page }) => {
