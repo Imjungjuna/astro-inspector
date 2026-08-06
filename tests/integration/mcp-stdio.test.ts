@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -40,6 +40,11 @@ describe("stdio MCP server", () => {
     try {
       await client.connect(transport);
       expect(client.getServerVersion()?.name).toBe("astro-inspector");
+      // 핸드셰이크 버전은 package.json 을 따라가야 한다. 상수로 두면 릴리스마다
+      // 잊혀 실제로 0.4.0 에서 멈춰 있었다.
+      expect(client.getServerVersion()?.version).toBe(
+        JSON.parse(await readFile("package.json", "utf8")).version
+      );
       const result = CallToolResultSchema.parse(
         await client.callTool({
           name: "get_astro_element_by_token",
