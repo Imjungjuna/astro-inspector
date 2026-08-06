@@ -108,6 +108,22 @@ A brand icon at the far left marks where the element came from: the Astro mark f
 
 The filename keeps its extension, and the arrow is omitted when the source tag and the rendered DOM tag are identical. The full project-relative path is preserved in the DOM metadata, the manifest, and the MCP response. Labels prefer to sit above the target. They use the space below when the label does not fit above but does fit below; if neither side fits, they choose the side with more available space. The result is then clamped to an 8px viewport inset on every edge. The 640px maximum width and ellipsis keep long source names readable without overflowing the screen.
 
+### Repeated items
+
+One call site can render many DOM nodes — a list, a grid, a table body. All of them share a source location, so the location alone cannot say *which* card you pointed at.
+
+When a page holds two or more elements with the same source location, the locator adds the item's own text to the answer:
+
+```
+◆ <Link→a> │ list.astro │ 42:7 │ 강남 C병원
+```
+
+- The hover label and `Context` copy show the text. An element with no text of its own — an icon button inside a card — borrows the text of the nearest repeating ancestor.
+- The token differs per item, so `Hash` copy points your agent at the card you clicked, not at the loop.
+- The MCP response adds `instance` (1-based document order) alongside the text, so an agent can tell the third card from the first even when two cards read the same.
+
+Instance order is read at click time. Re-sorting or filtering the list afterwards does not update a token you already copied.
+
 ### Copy feedback
 
 After a successful click, a bottom-center status toast confirms whether a token or Context payload was copied. It uses a short pop animation, stays visible long enough to read, and restarts cleanly for rapid consecutive clicks. The toast respects `prefers-reduced-motion` by fading without the scale or overshoot motion.
@@ -292,7 +308,7 @@ Consequences worth knowing:
 
 ### Token stability
 
-Repeated renders of the same `.astro` tag share one token across all DOM instances. When the file changes through HMR — or is deleted — its existing tokens are invalidated.
+Repeated renders of the same `.astro` tag are told apart by their instance order, so the third card in a list gets its own token — clicking that same card again returns the same token. A tag that renders once keeps a single token, unchanged from before. When the file changes through HMR — or is deleted — its existing tokens are invalidated.
 
 The manifest holds at most 100 entries. Once a selection pushes it past that, the 50 least recently registered entries are dropped, and their tokens stop resolving. Re-selecting an element moves it back to the newest end, so a token you are actively working with is not evicted out from under you. Numbers are never reused within a session, so a dropped token dies loudly instead of pointing at a different element.
 

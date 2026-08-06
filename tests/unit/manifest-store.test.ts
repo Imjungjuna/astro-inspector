@@ -52,7 +52,7 @@ describe("ManifestStore.issue", () => {
     expect(new Set([token1, token2, token3]).size).toBe(3);
   });
 
-  it("persists a version-2 manifest", async () => {
+  it("persists a version-3 manifest", async () => {
     const store = await createStore();
     const token1 = await store.issue(entryFor(1));
     const token2 = await store.issue(entryFor(2));
@@ -63,7 +63,7 @@ describe("ManifestStore.issue", () => {
       entries: Record<string, unknown>;
     };
 
-    expect(manifest.schemaVersion).toBe(2);
+    expect(manifest.schemaVersion).toBe(3);
     expect(manifest.entries[token1]).toBeDefined();
     expect(manifest.entries[token2]).toBeDefined();
   });
@@ -125,5 +125,48 @@ describe("ManifestStore.issue", () => {
 
     const snapshot = await store.readSnapshot();
     expect(Object.keys(snapshot.entries)).toEqual([kept]);
+  });
+
+  it("gives repeat instances of one call site different tokens", async () => {
+    const store = await createStore();
+    const base = {
+      file: "src/pages/list.astro",
+      line: 42,
+      column: 7,
+      sourceTag: "Link",
+      domTag: "a"
+    };
+
+    const first = await store.issue({
+      ...base,
+      instance: 1,
+      instanceLabel: "강남 A병원"
+    });
+    const third = await store.issue({
+      ...base,
+      instance: 3,
+      instanceLabel: "강남 C병원"
+    });
+    const firstAgain = await store.issue({
+      ...base,
+      instance: 1,
+      instanceLabel: "강남 A병원"
+    });
+
+    expect(first).not.toBe(third);
+    expect(firstAgain).toBe(first);
+  });
+
+  it("keeps one token for an element with no instance information", async () => {
+    const store = await createStore();
+    const entry = {
+      file: "src/pages/index.astro",
+      line: 5,
+      column: 1,
+      sourceTag: "h1",
+      domTag: "h1"
+    };
+
+    expect(await store.issue(entry)).toBe(await store.issue(entry));
   });
 });

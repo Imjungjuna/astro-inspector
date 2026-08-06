@@ -43,7 +43,72 @@ function responseRecorder() {
   };
 }
 
+async function registerWith(extra: Record<string, unknown>) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
+  const source = path.join(root, "src", "Card.astro");
+  await mkdir(path.dirname(source), { recursive: true });
+  await writeFile(source, "<article>Card</article>\n", "utf8");
+  const store = new ManifestStore(root);
+  await store.reset();
+  const handler = createRegistrationHandler({
+    root,
+    workspaceRoot: root,
+    sessionToken: "session-token",
+    store
+  });
+  const recorder = responseRecorder();
+
+  await handler(
+    requestFor({
+      sourceFile: source,
+      line: 1,
+      column: 1,
+      sourceTag: "article",
+      domTag: "article",
+      ...extra
+    }),
+    recorder.response,
+    vi.fn()
+  );
+
+  return { recorder, store };
+}
+
 describe("createRegistrationHandler", () => {
+  it("rejects an instance without its label", async () => {
+    const { recorder } = await registerWith({ instance: 2 });
+
+    expect(recorder.response.statusCode).toBe(400);
+  });
+
+  it("rejects a non-positive instance", async () => {
+    const { recorder } = await registerWith({
+      instance: 0,
+      instanceLabel: "첫째"
+    });
+
+    expect(recorder.response.statusCode).toBe(400);
+  });
+
+  it("stores the instance pair on the manifest entry", async () => {
+    const { recorder, store } = await registerWith({
+      instance: 2,
+      instanceLabel: "강남 B병원"
+    });
+
+    expect(recorder.response.statusCode).toBe(200);
+    const manifest = JSON.parse(
+      await readFile(store.manifestPath, "utf8")
+    ) as {
+      entries: Record<string, { instance?: number; instanceLabel?: string }>;
+    };
+    const token = JSON.parse(recorder.body()).token as string;
+    expect(manifest.entries[token]).toMatchObject({
+      instance: 2,
+      instanceLabel: "강남 B병원"
+    });
+  });
+
   it("returns a workspace-relative file without persisting browser-only data", async () => {
     const workspaceRoot = await mkdtemp(
       path.join(os.tmpdir(), "astro-locator-workspace-")
@@ -84,7 +149,7 @@ describe("createRegistrationHandler", () => {
       await readFile(store.manifestPath, "utf8")
     );
     expect(manifest).toEqual({
-      schemaVersion: 2,
+      schemaVersion: 3,
       entries: {
         [responseBody.token]: {
           file: "src/Card.astro",

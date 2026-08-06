@@ -4,6 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
+import { normalizeInstanceLabel } from "../../src/client/repeat-instances.js";
 import type {
   ColorPreset,
   ContextField,
@@ -151,7 +152,7 @@ test("Hide removes the button for this page but keeps the locator working", asyn
   await expect(page.locator("[data-astro-ai-locator-overlay]")).toBeVisible();
   await expect(
     page.locator("[data-astro-ai-locator-overlay] .label")
-  ).toHaveText(/^<h2>│Card\.astro│\d+:\d+$/u);
+  ).toHaveText(/^<h2>│Card\.astro│\d+:\d+│Alpha$/u);
   await page.keyboard.up("Alt");
 
   // 새로고침이 유일한 복구 경로다.
@@ -320,7 +321,8 @@ test("Alt hover reveals the page map, annotated parent, current target, and stru
   await expect(label).toHaveText(
     /^<span>│ReactIsland\.tsx│\d+:\d+$/u
   );
-  await expect(label.locator(".label-separator")).toHaveText(["│", "│"]);
+  // 세 번째 구분자는 반복 항목 세그먼트용이다. react-child-label 은 반복이 아니라 비어 있다.
+  await expect(label.locator(".label-separator")).toHaveText(["│", "│", ""]);
   await expect(label.locator(".label-tag")).toHaveCSS("font-weight", "600");
   await expect(label.locator(".label-tag")).toHaveCSS("opacity", "1");
   await expect(label.locator(".label-file")).toHaveCSS("font-weight", "500");
@@ -792,6 +794,12 @@ for (const copyCase of [
           : locationValue
       );
     }
+    // card-alpha 는 Card.astro 의 map 이 찍는 반복 인스턴스라, 설정과 무관하게
+    // 자기 텍스트가 항상 붙는다.
+    if (copyCase.target === "card-alpha") {
+      const ownText = await target.evaluate((element) => element.textContent ?? "");
+      expectedParts.push(normalizeInstanceLabel(ownText));
+    }
     const expected = expectedParts.join(" | ");
 
     await target.click({ modifiers: ["Alt"], position: { x: 4, y: 4 } });
@@ -1242,7 +1250,7 @@ test("an annotated pointer-events none child remains selectable", async ({
   });
 });
 
-test("repeated DOM instances from one source tag share one token", async ({
+test("repeated DOM instances are told apart by their instance order", async ({
   page
 }) => {
   await page.goto("/");
@@ -1263,7 +1271,115 @@ test("repeated DOM instances from one source tag share one token", async ({
     .toMatch(/^#a[0-9a-z]{3}$/);
   const second = await page.evaluate(() => navigator.clipboard.readText());
 
-  expect(first).toBe(second);
+  // 같은 호출부지만 다른 인스턴스라 토큰이 갈린다. 같은 카드를 다시 집으면 같은 토큰이다.
+  expect(first).not.toBe(second);
+  await page.evaluate(() => navigator.clipboard.writeText(""));
+  await page
+    .getByTestId("card-alpha")
+    .click({ modifiers: ["Alt"], position: { x: 4, y: 4 } });
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe(first);
+});
+
+test("repeat instances of one call site get different tokens", async ({
+  page
+}) => {
+  await page.goto("/");
+  await page.evaluate(() => navigator.clipboard.writeText(""));
+
+  const titles = page.getByTestId("repeat-card-title");
+  await titles.nth(0).click({ modifiers: ["Alt"] });
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toMatch(/^#[0-9a-z]{4}$/u);
+  const first = await page.evaluate(() => navigator.clipboard.readText());
+
+  await page.evaluate(() => navigator.clipboard.writeText(""));
+  await titles.nth(2).click({ modifiers: ["Alt"] });
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toMatch(/^#[0-9a-z]{4}$/u);
+  const third = await page.evaluate(() => navigator.clipboard.readText());
+
+  expect(first).not.toBe(third);
+
+  const manifestPath = path.resolve(
+    "tests/fixtures/basic/.astro-ai-locator/manifest.json"
+  );
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+    entries: Record<
+      string,
+      { instance?: number; instanceLabel?: string }
+    >;
+  };
+  expect(manifest.entries[first]).toMatchObject({
+    instance: 1,
+    instanceLabel: "강남 A병원"
+  });
+  expect(manifest.entries[third]).toMatchObject({
+    instance: 3,
+    instanceLabel: "강남 C병원"
+  });
+});
+
+test("a repeat instance with no text of its own borrows the card label", async ({
+  page
+}) => {
+  await page.goto("/");
+  await page.evaluate(() => navigator.clipboard.writeText(""));
+
+  await page.getByTestId("repeat-card-icon").nth(1).click({ modifiers: ["Alt"] });
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toMatch(/^#[0-9a-z]{4}$/u);
+  const token = await page.evaluate(() => navigator.clipboard.readText());
+
+  const manifestPath = path.resolve(
+    "tests/fixtures/basic/.astro-ai-locator/manifest.json"
+  );
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+    entries: Record<string, { instance?: number; instanceLabel?: string }>;
+  };
+  expect(manifest.entries[token]).toMatchObject({
+    instance: 2,
+    instanceLabel: "강남 B병원"
+  });
+});
+
+test("the hover label shows which item a repeat instance is", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  await page.goto("/");
+
+  const label = page.locator("[data-astro-ai-locator-overlay] .label");
+  await page.getByTestId("repeat-card-title").nth(1).hover();
+  await page.keyboard.down("Alt");
+  await expect(label).toHaveText(/│강남 B병원$/u);
+
+  // 반복이 아닌 요소에는 항목 세그먼트가 붙지 않는다.
+  await page.getByRole("heading", { name: "Locator fixture" }).hover();
+  await expect(label).toHaveText(/^<h1>│index\.astro│\d+:\d+$/u);
+  await page.keyboard.up("Alt");
+});
+
+test("Context copy carries the item text for a repeat instance", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page, "alt", "violet", 1, {
+    copyMode: "context",
+    contextFields: ["tag", "location", "line"],
+    locationFormat: "path"
+  });
+  await page.goto("/");
+  await page.evaluate(() => navigator.clipboard.writeText(""));
+
+  await page.getByTestId("repeat-card-title").nth(2).click({ modifiers: ["Alt"] });
+
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toMatch(/^<a>\s\|\s\/tests\/fixtures\/basic\/src\/components\/RepeatList\.astro:\d+:\d+\s\|\s강남 C병원$/u);
 });
 
 test("the copied browser token resolves to the same entry through MCP", async ({

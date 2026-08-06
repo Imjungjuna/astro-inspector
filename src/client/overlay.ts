@@ -87,7 +87,7 @@ const TOAST_STYLE = `
 `;
 
 export interface LocatorOverlay {
-  show(target: Element): void;
+  show(target: Element, instanceLabel?: string): void;
   hide(): void;
   toast(message: string): void;
   setColorPreset(colorPreset: ColorPreset): void;
@@ -246,12 +246,20 @@ export function createOverlay(
         margin-inline: 4px;
         opacity: 0.48;
       }
+      .label-instance {
+        font-weight: 400;
+        opacity: 0.85;
+      }
+      .label:not([data-instance]) .label-instance-separator,
+      .label:not([data-instance]) .label-instance {
+        display: none;
+      }
     </style>
     <div class="parent-box" data-parent-level="1"></div>
     <div class="parent-box" data-parent-level="2"></div>
     <div class="parent-box" data-parent-level="3"></div>
     <div class="box"></div>
-    <span class="label"><span class="label-icon">${FRAMEWORK_ICON_SVG.astro}${FRAMEWORK_ICON_SVG.react}</span><span class="label-tag"></span><span class="label-separator" aria-hidden="true">│</span><span class="label-file"></span><span class="label-separator" aria-hidden="true">│</span><span class="label-location"></span></span>
+    <span class="label"><span class="label-icon">${FRAMEWORK_ICON_SVG.astro}${FRAMEWORK_ICON_SVG.react}</span><span class="label-tag"></span><span class="label-separator" aria-hidden="true">│</span><span class="label-file"></span><span class="label-separator" aria-hidden="true">│</span><span class="label-location"></span><span class="label-separator label-instance-separator" aria-hidden="true"></span><span class="label-instance"></span></span>
   `;
   applyColorPreset(host, colorPreset);
   document.documentElement.append(host);
@@ -271,13 +279,20 @@ export function createOverlay(
   const labelFile = shadow.querySelector<HTMLElement>(".label-file");
   const labelLocation =
     shadow.querySelector<HTMLElement>(".label-location");
+  const labelInstance =
+    shadow.querySelector<HTMLElement>(".label-instance");
+  const labelInstanceSeparator = shadow.querySelector<HTMLElement>(
+    ".label-instance-separator"
+  );
   if (
     parentBoxes.length !== 3 ||
     !box ||
     !label ||
     !labelTag ||
     !labelFile ||
-    !labelLocation
+    !labelLocation ||
+    !labelInstance ||
+    !labelInstanceSeparator
   ) {
     throw new Error("Locator overlay could not initialize");
   }
@@ -285,7 +300,7 @@ export function createOverlay(
   let currentParentLevels = parentLevels;
 
   return {
-    show(target) {
+    show(target, instanceLabel) {
       const rect = target.getBoundingClientRect();
       const parentRects = collectParentRects(
         target,
@@ -319,6 +334,15 @@ export function createOverlay(
       labelTag.textContent = `<${tagLabel}>`;
       labelFile.textContent = fileName;
       labelLocation.textContent = location;
+      if (instanceLabel) {
+        label.dataset.instance = "";
+        labelInstanceSeparator.textContent = "│";
+        labelInstance.textContent = instanceLabel;
+      } else {
+        delete label.dataset.instance;
+        labelInstanceSeparator.textContent = "";
+        labelInstance.textContent = "";
+      }
       label.style.display = "block";
       const labelRect = label.getBoundingClientRect();
       const spaceAbove = rect.top - LABEL_VIEWPORT_GAP;

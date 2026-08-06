@@ -196,7 +196,7 @@ describe("resolveElementByToken", () => {
     await writeFile(
       path.join(root, ".astro-ai-locator", "manifest.json"),
       JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         entries: {
           "#a000": {
             file: "src/Card.astro",
@@ -213,5 +213,45 @@ describe("resolveElementByToken", () => {
     await expect(
       resolveElementByToken({ projectRoot: root, token: "#a000" })
     ).rejects.toThrow(/does not match the current source/u);
+  });
+
+  async function resolveWithEntry(
+    extra: { instance?: number; instanceLabel?: string }
+  ) {
+    const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
+    const file = path.join(root, "src", "list.astro");
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, "<a href=\"/x\">강남 C병원</a>\n", "utf8");
+    const store = new ManifestStore(root);
+    await store.reset();
+    const token = await store.issue({
+      file: "src/list.astro",
+      line: 1,
+      column: 1,
+      sourceTag: "a",
+      domTag: "a",
+      ...extra
+    });
+
+    return resolveElementByToken({ projectRoot: root, token });
+  }
+
+  it("returns the instance pair when the entry carries one", async () => {
+    const resolved = await resolveWithEntry({
+      instance: 3,
+      instanceLabel: "강남 C병원"
+    });
+
+    expect(resolved).toMatchObject({
+      instance: 3,
+      instanceLabel: "강남 C병원"
+    });
+  });
+
+  it("omits the instance pair when the entry has none", async () => {
+    const resolved = await resolveWithEntry({});
+
+    expect(resolved).not.toHaveProperty("instance");
+    expect(resolved).not.toHaveProperty("instanceLabel");
   });
 });

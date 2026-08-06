@@ -38,16 +38,23 @@ export interface LocatorSettings {
   locationFormat: LocationFormat;
 }
 
+/** 반복 항목 힌트로 들고 다니는 텍스트의 최대 길이. 라벨·Context·MCP 가 공유한다. */
+export const INSTANCE_LABEL_MAX = 40;
+
 export interface LocatorManifestEntry {
   file: string;
   line: number;
   column: number;
   sourceTag: string;
   domTag: string;
+  /** 같은 호출부가 여러 번 렌더된 자리에서만 채워진다. 1부터 센다. */
+  instance?: number | undefined;
+  /** 항목을 사람이 알아보게 하는 힌트. 텍스트 없는 요소에서는 빈 문자열이다. */
+  instanceLabel?: string | undefined;
 }
 
 export interface LocatorManifest {
-  schemaVersion: 2;
+  schemaVersion: 3;
   entries: Record<string, LocatorManifestEntry>;
 }
 
@@ -57,6 +64,10 @@ export interface RegisterElementRequest {
   column: number;
   sourceTag: string;
   domTag: string;
+  /** 같은 호출부가 여러 번 렌더된 자리에서만 채워진다. 1부터 센다. */
+  instance?: number | undefined;
+  /** 항목을 사람이 알아보게 하는 힌트. 텍스트 없는 요소에서는 빈 문자열이다. */
+  instanceLabel?: string | undefined;
 }
 
 export interface RegisterElementResponse {
