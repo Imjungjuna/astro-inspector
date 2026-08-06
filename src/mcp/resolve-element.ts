@@ -20,6 +20,10 @@ export interface ResolvedAstroElement {
   column: number;
   sourceTag: string;
   domTag: string;
+  /** 같은 호출부가 여러 번 렌더된 자리에서만 채워진다. 1부터 센다. */
+  instance?: number;
+  /** 항목을 사람이 알아보게 하는 힌트. 텍스트 없는 요소에서는 빈 문자열이다. */
+  instanceLabel?: string;
   excerpt: string;
 }
 
@@ -115,6 +119,12 @@ export async function resolveElementByToken(
     column: entry.column,
     sourceTag: entry.sourceTag,
     domTag: entry.domTag,
+    ...(entry.instance === undefined
+      ? {}
+      : {
+          instance: entry.instance,
+          instanceLabel: entry.instanceLabel ?? ""
+        }),
     excerpt: createExcerpt(source, entry.line)
   };
 }

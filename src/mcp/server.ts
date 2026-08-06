@@ -26,7 +26,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     {
       title: "Resolve an Astro UI element",
       description:
-        "Call this whenever the user provides a 5-character locator token starting with #a (for example #a7k9). Returns the exact Astro, JSX, or TSX source file, line, column, source tag, rendered DOM tag, and a focused source excerpt for that selected UI element.",
+        "Call this whenever the user provides a 5-character locator token starting with #a (for example #a7k9). Returns the exact Astro, JSX, or TSX source file, line, column, source tag, rendered DOM tag, and a focused source excerpt for that selected UI element. When the element came from a repeated call site — a card in a list, a row in a table — the response also includes `instance` (1-based document order) and `instanceLabel` (the item's own text), so you can tell which occurrence was selected even when several occurrences read the same.",
       inputSchema: {
         token: z
           .string()
