@@ -5,6 +5,7 @@ import ForwardedButton from "../../../shared/ForwardedButton.astro";
 import LocalForwardedButton from "../components/LocalForwardedButton.astro";
 import NestedForwardedButton from "../components/NestedForwardedButton.astro";
 import PlainWrapper from "../components/PlainWrapper.astro";
+import RepeatList from "../components/RepeatList.astro";
 ---
 
 <html lang="en">
@@ -27,6 +28,7 @@ import PlainWrapper from "../components/PlainWrapper.astro";
       </NestedForwardedButton>
       <PlainWrapper>Wrapper that drops its props</PlainWrapper>
       <ReactIsland client:load />
+      <RepeatList />
     </main>
   </body>
 </html>

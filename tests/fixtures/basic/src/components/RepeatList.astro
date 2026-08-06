@@ -1,0 +1,17 @@
+---
+// 한 호출부가 카드 3개를 찍는다. 아이콘 버튼은 텍스트가 없어 조상 폴백을 검증한다.
+const hospitals = ["강남 A병원", "강남 B병원", "강남 C병원"];
+---
+
+<ul class="repeat-list">
+  {
+    hospitals.map((name) => (
+      <li class="repeat-card" data-testid="repeat-card">
+        <a href={`/hospital/${name}`} data-testid="repeat-card-title">
+          {name}
+        </a>
+        <button type="button" aria-label="북마크" data-testid="repeat-card-icon" />
+      </li>
+    ))
+  }
+</ul>

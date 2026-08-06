@@ -25,6 +25,11 @@ import {
 import { formatClipboardPayload } from "./clipboard-payload.js";
 import { formatMcpSetupPrompt } from "./mcp-prompt.js";
 import { loadSessionState, quitLocatorSession } from "./session-api.js";
+import {
+  resolveRepeatInstances,
+  type RepeatCandidate,
+  type RepeatInstance
+} from "./repeat-instances.js";
 
 declare global {
   interface Window {
@@ -212,6 +217,48 @@ function collectPointerTransparentCandidates(): Element[] {
   );
 }
 
+/**
+ * 트리거 키를 누를 때 한 번만 돈다. 호버마다 문서를 다시 훑으면 큰 목록에서 비싸다.
+ * 순번 계산은 순수 함수에 맡기고, 여기서는 DOM 에서 재료만 뽑는다.
+ */
+function collectRepeatInstances(): Map<Element, RepeatInstance> {
+  const elements = Array.from(document.querySelectorAll(SOURCE_SELECTOR));
+  const indexByElement = new Map<Element, number>();
+  elements.forEach((element, index) => {
+    indexByElement.set(element, index);
+  });
+  const candidates: RepeatCandidate[] = elements.map((element) => {
+    let ancestor = element.parentElement;
+    let parentIndex: number | null = null;
+    while (ancestor) {
+      const found = indexByElement.get(ancestor);
+      if (found !== undefined) {
+        parentIndex = found;
+        break;
+      }
+      ancestor = ancestor.parentElement;
+    }
+    return {
+      identity: [
+        element.getAttribute(SOURCE_FILE_ATTRIBUTE) ?? "",
+        element.getAttribute(SOURCE_LOCATION_ATTRIBUTE) ?? "",
+        element.getAttribute(SOURCE_TAG_ATTRIBUTE) ?? element.localName
+      ].join(" "),
+      text: element.textContent ?? "",
+      parentIndex
+    };
+  });
+  const resolved = resolveRepeatInstances(candidates);
+  const instances = new Map<Element, RepeatInstance>();
+  elements.forEach((element, index) => {
+    const value = resolved[index];
+    if (value) {
+      instances.set(element, value);
+    }
+  });
+  return instances;
+}
+
 function isLocatorUiEvent(event: Event): boolean {
   return event.composedPath().some(
     (target) =>
@@ -220,7 +267,10 @@ function isLocatorUiEvent(event: Event): boolean {
   );
 }
 
-function parseTarget(target: Element): RegisterElementRequest | null {
+function parseTarget(
+  target: Element,
+  repeat: RepeatInstance | undefined
+): RegisterElementRequest | null {
   const sourceFile = target.getAttribute(SOURCE_FILE_ATTRIBUTE);
   const location = target.getAttribute(SOURCE_LOCATION_ATTRIBUTE);
   const domTag = target.localName.toLowerCase();
@@ -234,7 +284,10 @@ function parseTarget(target: Element): RegisterElementRequest | null {
     line: Number(match[1]),
     column: Number(match[2]),
     sourceTag,
-    domTag
+    domTag,
+    ...(repeat
+      ? { instance: repeat.instance, instanceLabel: repeat.instanceLabel }
+      : {})
   };
 }
 
@@ -284,6 +337,7 @@ function installReadyLocator(
 
   let activeTarget: Element | null = null;
   let pointerTransparentCandidates: Element[] = [];
+  let repeatInstances = new Map<Element, RepeatInstance>();
   let pointerX = 0;
   let pointerY = 0;
   let currentSettings = initialSettings;
@@ -298,6 +352,7 @@ function installReadyLocator(
         ""
       );
       pointerTransparentCandidates = collectPointerTransparentCandidates();
+      repeatInstances = collectRepeatInstances();
       activeTarget = resolveTargetAtPoint(
         pointerX,
         pointerY,
@@ -313,6 +368,7 @@ function installReadyLocator(
     );
     activeTarget = null;
     pointerTransparentCandidates = [];
+    repeatInstances = new Map();
     overlay.hide();
   };
 
@@ -475,7 +531,7 @@ function installReadyLocator(
     if (!target) {
       return;
     }
-    const input = parseTarget(target);
+    const input = parseTarget(target, repeatInstances.get(target));
     if (!input) {
       overlay.toast("Unable to read Astro source metadata");
       return;

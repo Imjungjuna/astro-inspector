@@ -1242,7 +1242,7 @@ test("an annotated pointer-events none child remains selectable", async ({
   });
 });
 
-test("repeated DOM instances from one source tag share one token", async ({
+test("repeated DOM instances are told apart by their instance order", async ({
   page
 }) => {
   await page.goto("/");
@@ -1263,7 +1263,80 @@ test("repeated DOM instances from one source tag share one token", async ({
     .toMatch(/^#a[0-9a-z]{3}$/);
   const second = await page.evaluate(() => navigator.clipboard.readText());
 
-  expect(first).toBe(second);
+  // 같은 호출부지만 다른 인스턴스라 토큰이 갈린다. 같은 카드를 다시 집으면 같은 토큰이다.
+  expect(first).not.toBe(second);
+  await page.evaluate(() => navigator.clipboard.writeText(""));
+  await page
+    .getByTestId("card-alpha")
+    .click({ modifiers: ["Alt"], position: { x: 4, y: 4 } });
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe(first);
+});
+
+test("repeat instances of one call site get different tokens", async ({
+  page
+}) => {
+  await page.goto("/");
+  await page.evaluate(() => navigator.clipboard.writeText(""));
+
+  const titles = page.getByTestId("repeat-card-title");
+  await titles.nth(0).click({ modifiers: ["Alt"] });
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toMatch(/^#[0-9a-z]{4}$/u);
+  const first = await page.evaluate(() => navigator.clipboard.readText());
+
+  await page.evaluate(() => navigator.clipboard.writeText(""));
+  await titles.nth(2).click({ modifiers: ["Alt"] });
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toMatch(/^#[0-9a-z]{4}$/u);
+  const third = await page.evaluate(() => navigator.clipboard.readText());
+
+  expect(first).not.toBe(third);
+
+  const manifestPath = path.resolve(
+    "tests/fixtures/basic/.astro-ai-locator/manifest.json"
+  );
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+    entries: Record<
+      string,
+      { instance?: number; instanceLabel?: string }
+    >;
+  };
+  expect(manifest.entries[first]).toMatchObject({
+    instance: 1,
+    instanceLabel: "강남 A병원"
+  });
+  expect(manifest.entries[third]).toMatchObject({
+    instance: 3,
+    instanceLabel: "강남 C병원"
+  });
+});
+
+test("a repeat instance with no text of its own borrows the card label", async ({
+  page
+}) => {
+  await page.goto("/");
+  await page.evaluate(() => navigator.clipboard.writeText(""));
+
+  await page.getByTestId("repeat-card-icon").nth(1).click({ modifiers: ["Alt"] });
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toMatch(/^#[0-9a-z]{4}$/u);
+  const token = await page.evaluate(() => navigator.clipboard.readText());
+
+  const manifestPath = path.resolve(
+    "tests/fixtures/basic/.astro-ai-locator/manifest.json"
+  );
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+    entries: Record<string, { instance?: number; instanceLabel?: string }>;
+  };
+  expect(manifest.entries[token]).toMatchObject({
+    instance: 2,
+    instanceLabel: "강남 B병원"
+  });
 });
 
 test("the copied browser token resolves to the same entry through MCP", async ({
