@@ -41,6 +41,11 @@ export function formatClipboardPayload(
   if (settings.contextFields.includes("location")) {
     parts.push(formatLocation(registration, settings));
   }
+  // 반복 항목일 때만, 설정과 무관하게 붙는다. 어느 항목인지가 위치보다 먼저 필요하다.
+  const instanceLabel = registration.entry.instanceLabel;
+  if (instanceLabel) {
+    parts.push(instanceLabel);
+  }
   if (parts.length === 0) {
     throw new Error("Context copy requires at least one context field");
   }

@@ -115,4 +115,56 @@ describe("formatClipboardPayload", () => {
       formatClipboardPayload(registration, contextSettings([]))
     ).toThrow("Context copy requires");
   });
+
+  it("appends the item label for a repeat instance", () => {
+    expect(
+      formatClipboardPayload(
+        {
+          ...registration,
+          entry: {
+            ...registration.entry,
+            instance: 3,
+            instanceLabel: "강남 C병원"
+          }
+        },
+        contextSettings(["tag", "location", "line"])
+      )
+    ).toBe(
+      "<Link→a> | /apps/astro/src/components/HospitalListCard.tsx:298:13 | 강남 C병원"
+    );
+  });
+
+  it("omits the label when the instance has no text", () => {
+    expect(
+      formatClipboardPayload(
+        {
+          ...registration,
+          entry: {
+            ...registration.entry,
+            sourceTag: "button",
+            domTag: "button",
+            instance: 2,
+            instanceLabel: ""
+          }
+        },
+        contextSettings(["tag"])
+      )
+    ).toBe("<button>");
+  });
+
+  it("leaves the hash payload untouched for a repeat instance", () => {
+    expect(
+      formatClipboardPayload(
+        {
+          ...registration,
+          entry: {
+            ...registration.entry,
+            instance: 3,
+            instanceLabel: "강남 C병원"
+          }
+        },
+        { ...contextSettings(["tag"]), copyMode: "hash" }
+      )
+    ).toBe("#a7k9");
+  });
 });

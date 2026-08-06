@@ -359,7 +359,7 @@ function installReadyLocator(
         pointerTransparentCandidates
       );
       if (activeTarget) {
-        overlay.show(activeTarget);
+        overlay.show(activeTarget, repeatInstances.get(activeTarget)?.instanceLabel);
       }
       return;
     }
@@ -446,7 +446,7 @@ function installReadyLocator(
         if (triggerChanged) {
           setActive(false);
         } else if (activeTarget) {
-          overlay.show(activeTarget);
+          overlay.show(activeTarget, repeatInstances.get(activeTarget)?.instanceLabel);
         }
         return settings;
       } catch (error) {
@@ -504,7 +504,7 @@ function installReadyLocator(
     if (candidate !== activeTarget) {
       activeTarget = candidate ?? null;
       if (activeTarget) {
-        overlay.show(activeTarget);
+        overlay.show(activeTarget, repeatInstances.get(activeTarget)?.instanceLabel);
       } else {
         overlay.hide();
       }
@@ -629,7 +629,7 @@ function installReadyLocator(
   };
   const repositionActiveTarget = () => {
     if (activeTarget) {
-      overlay.show(activeTarget);
+      overlay.show(activeTarget, repeatInstances.get(activeTarget)?.instanceLabel);
     }
   };
 
