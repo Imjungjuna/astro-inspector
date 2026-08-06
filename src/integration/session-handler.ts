@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { LocatorSessionState } from "../shared/contracts.js";
+import type { LocatorSessionStateStore } from "./session-state.js";
 
 type Next = (error?: unknown) => void;
 
@@ -7,18 +8,12 @@ interface SessionHandlerOptions {
   mcpCommand: string;
   mcpArgs: string[];
   sessionToken: string;
+  state: LocatorSessionStateStore;
 }
 
-/**
- * Holds the per-process disable flag. It lives in memory on purpose: writing it
- * to disk would survive a dev server restart, and restarting is the only way
- * the user gets the locator back.
- */
 export function createSessionHandler(options: SessionHandlerOptions) {
-  let disabled = false;
-
   const state = (): LocatorSessionState => ({
-    disabled,
+    disabled: options.state.isDisabled(),
     mcpCommand: options.mcpCommand,
     mcpArgs: [...options.mcpArgs]
   });
@@ -45,7 +40,7 @@ export function createSessionHandler(options: SessionHandlerOptions) {
     }
 
     if (request.method === "POST") {
-      disabled = true;
+      options.state.disable();
       request.resume();
     }
 

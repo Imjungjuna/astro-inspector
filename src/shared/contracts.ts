@@ -68,7 +68,7 @@ export interface RegisterElementResponse {
 /**
  * Facts about the running dev server process, not persisted anywhere.
  * `disabled` resets when the dev server restarts, which is the only way to
- * bring the locator back after Quit Extension.
+ * bring the locator back after Quit.
  */
 export interface LocatorSessionState {
   disabled: boolean;

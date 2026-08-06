@@ -39,7 +39,7 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run tests/unit",
     "test:coverage": "vitest run tests/unit --coverage",
-    "test:integration": "npm run build && vitest run tests/integration/mcp-stdio.test.ts",
+    "test:integration": "npm run build && vitest run tests/integration/mcp-stdio.test.ts tests/integration/quit-stops-instrumentation.test.ts",
     "fixture:dev": "astro dev --root tests/fixtures/basic --host 127.0.0.1 --port 4321",
     "fixture:build": "astro build --root tests/fixtures/basic",
     "test:e2e": "npm run build && playwright test",

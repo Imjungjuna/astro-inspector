@@ -5,6 +5,7 @@ import type { HmrContext } from "vite";
 import { describe, expect, it } from "vitest";
 import { createLocatorVitePlugin } from "../../src/integration/vite-plugin.js";
 import { ManifestStore } from "../../src/manifest/store.js";
+import { createSessionState } from "../../src/integration/session-state.js";
 import { LocatorSettingsStore } from "../../src/settings/store.js";
 import {
   LOCATOR_ENDPOINT,
@@ -235,5 +236,123 @@ describe("createLocatorVitePlugin", () => {
     );
 
     expect((await store.readSnapshot()).entries).toEqual({});
+  });
+
+  it("stops injecting once the session is disabled", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
+    const file = path.join(root, "src", "Card.astro");
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, "<article>Card</article>", "utf8");
+    const session = createSessionState();
+    const plugin = createLocatorVitePlugin({
+      root,
+      sessionToken: "session-token",
+      session
+    });
+    const load = plugin.load;
+    if (typeof load !== "function") {
+      throw new Error("Expected a callable load hook");
+    }
+
+    session.disable();
+
+    expect(await load.call({ addWatchFile() {} } as never, file)).toBeNull();
+  });
+
+  it("answers registration with 410 once the session is disabled", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
+    const session = createSessionState();
+    const plugin = createLocatorVitePlugin({
+      root,
+      sessionToken: "session-token",
+      session
+    });
+    const configureServer = plugin.configureServer;
+    if (typeof configureServer !== "function") {
+      throw new Error("Expected a callable configureServer hook");
+    }
+    const routes = new Map<string, (request: unknown, response: unknown, next: () => void) => void>();
+
+    configureServer.call({} as never, {
+      middlewares: {
+        use(route: string, handler: (request: unknown, response: unknown, next: () => void) => void) {
+          routes.set(route, handler);
+        }
+      },
+      watcher: { on() {}, off() {} },
+      httpServer: null,
+      config: { logger: { error() {} } }
+    } as never);
+
+    session.disable();
+
+    const register = routes.get(LOCATOR_ENDPOINT);
+    if (!register) {
+      throw new Error("Registration middleware was not mounted");
+    }
+    let statusCode = 0;
+    let body = "";
+    register(
+      { method: "POST", headers: {} },
+      {
+        setHeader() {},
+        set statusCode(value: number) {
+          statusCode = value;
+        },
+        get statusCode() {
+          return statusCode;
+        },
+        end(chunk?: string) {
+          body = chunk ?? "";
+        }
+      },
+      () => {
+        throw new Error("Disabled registration must not fall through");
+      }
+    );
+
+    expect(statusCode).toBe(410);
+    expect(JSON.parse(body).error).toBe("Locator is closed for this dev server");
+  });
+
+  it("detaches the unlink watcher once the session is disabled", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "astro-locator-"));
+    const session = createSessionState();
+    const plugin = createLocatorVitePlugin({
+      root,
+      sessionToken: "session-token",
+      session
+    });
+    const configureServer = plugin.configureServer;
+    if (typeof configureServer !== "function") {
+      throw new Error("Expected a callable configureServer hook");
+    }
+    const detached: Array<[string, unknown]> = [];
+    let attachedUnlinkHandler: unknown;
+
+    configureServer.call({} as never, {
+      middlewares: { use() {} },
+      watcher: {
+        on(event: string, handler: unknown) {
+          if (event === "unlink") {
+            attachedUnlinkHandler = handler;
+          }
+        },
+        off(event: string, handler: unknown) {
+          detached.push([event, handler]);
+        }
+      },
+      httpServer: null,
+      config: { logger: { error() {} } },
+      environments: {}
+    } as never);
+
+    expect(typeof attachedUnlinkHandler).toBe("function");
+
+    session.disable();
+
+    // `off("unlink")` 인자 없이 부르면 Vite 자체 리스너까지 다 떨어져 나간다.
+    // 붙였던 핸들러와 같은 함수 참조인지까지 확인해야 그 실수를 잡아낸다.
+    expect(detached).toContainEqual(["unlink", attachedUnlinkHandler]);
   });
 });

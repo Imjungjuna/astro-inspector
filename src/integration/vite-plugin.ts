@@ -2,7 +2,7 @@ import { realpathSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { searchForWorkspaceRoot, type Plugin } from "vite";
+import { searchForWorkspaceRoot, type Plugin, type ViteDevServer } from "vite";
 import {
   normalizeRelativeFile,
   toProjectRelativeFile
@@ -21,6 +21,7 @@ import { injectAstroSourceMetadata } from "./inject-source-metadata.js";
 import { injectJsxSourceMetadata } from "./inject-jsx-source-metadata.js";
 import { createRegistrationHandler } from "./request-handler.js";
 import { createSessionHandler } from "./session-handler.js";
+import { createSessionState, type LocatorSessionStateStore } from "./session-state.js";
 import { createSettingsHandler } from "./settings-handler.js";
 
 const MCP_BIN_NAME = "astro-inspector-mcp";
@@ -57,12 +58,50 @@ interface LocatorVitePluginOptions {
   sessionToken: string;
   store?: ManifestStore;
   settingsStore?: LocatorSettingsStore;
+  session?: LocatorSessionStateStore;
 }
 
 const SOURCE_EXTENSIONS = new Set([".astro", ".jsx", ".tsx"]);
 
 function isSourceFile(file: string): boolean {
   return SOURCE_EXTENSIONS.has(path.extname(file).toLowerCase());
+}
+
+/**
+ * Quit 시점에 이미 변환돼 캐시된 모듈을 그래프에서 떨어뜨린다. HMR 업데이트는
+ * 보내지 않는다 — 버튼 하나 눌렀다고 열려 있는 탭이 full reload 되면 폼 입력과
+ * 스크롤이 날아간다. 현재 탭은 그대로 두고 다음 요청부터 깨끗해진다.
+ * Vite 8 은 모듈 그래프가 환경별로 갈라져 있어 둘 다 훑는다.
+ */
+function invalidateInjectedModules(
+  server: ViteDevServer,
+  isInjectedFile: (file: string) => boolean
+): void {
+  // 환경별 그래프와 구형 단일 그래프는 모듈 타입이 서로 달라, 하나의 배열로
+  // 합치면 TS 가 두 타입의 교집합을 요구한다(exactOptionalPropertyTypes). 제네릭
+  // 헬퍼로 그래프마다 따로 호출해 타입을 섞지 않는다.
+  function invalidateGraph<Module extends { file?: string | null }>(
+    graph: {
+      idToModuleMap: Map<string, Module>;
+      invalidateModule: (module: Module) => void;
+    }
+  ): void {
+    for (const module of graph.idToModuleMap.values()) {
+      if (module.file && isInjectedFile(module.file)) {
+        graph.invalidateModule(module);
+      }
+    }
+  }
+
+  if (server.environments) {
+    for (const environment of Object.values(server.environments)) {
+      if (environment.moduleGraph) {
+        invalidateGraph(environment.moduleGraph);
+      }
+    }
+  } else if (server.moduleGraph) {
+    invalidateGraph(server.moduleGraph);
+  }
 }
 
 export function createLocatorVitePlugin(
@@ -108,9 +147,11 @@ export function createLocatorVitePlugin(
     sessionToken: options.sessionToken,
     store: settingsStore
   });
+  const session = options.session ?? createSessionState();
   const sessionHandler = createSessionHandler({
     ...resolveMcpCommand(configuredRoot, workspaceRoot),
-    sessionToken: options.sessionToken
+    sessionToken: options.sessionToken,
+    state: session
   });
   // dist/integration/vite-plugin.js 기준 한 단계 위가 dist 루트다.
   const distDirectory = fileURLToPath(new URL("..", import.meta.url));
@@ -148,6 +189,10 @@ export function createLocatorVitePlugin(
     // file on disk, so the SSR and client pipelines start from the same string
     // and later transforms cannot shift the coordinates already baked in.
     async load(id) {
+      // Quit 이후에는 원본을 그대로 서빙한다.
+      if (session.isDisabled()) {
+        return null;
+      }
       // `?raw`, `?url` and friends still end in a source extension but must be
       // served verbatim.
       if (id.includes("?")) {
@@ -168,6 +213,15 @@ export function createLocatorVitePlugin(
     },
     configureServer(server) {
       server.middlewares.use(LOCATOR_ENDPOINT, (request, response, next) => {
+        if (session.isDisabled()) {
+          response.statusCode = 410;
+          response.setHeader("content-type", "application/json; charset=utf-8");
+          response.setHeader("cache-control", "no-store");
+          response.end(
+            JSON.stringify({ error: "Locator is closed for this dev server" })
+          );
+          return;
+        }
         void ready
           .then(() => registrationHandler(request, response, next))
           .catch(next);
@@ -207,6 +261,27 @@ export function createLocatorVitePlugin(
       };
 
       server.watcher.on("unlink", removeUnlinkedFile);
+
+      const isInjectedFile = (file: string) => {
+        if (!isSourceFile(file)) {
+          return false;
+        }
+        const absoluteFile = path.resolve(file);
+        return [configuredRoot, root].some((base) => {
+          const relative = path.relative(base, absoluteFile);
+          return (
+            relative !== "" &&
+            !relative.startsWith(`..${path.sep}`) &&
+            !path.isAbsolute(relative)
+          );
+        });
+      };
+
+      session.onDisable(() => {
+        server.watcher.off("unlink", removeUnlinkedFile);
+        invalidateInjectedModules(server, isInjectedFile);
+      });
+
       server.httpServer?.once("close", () => {
         server.watcher.off("unlink", removeUnlinkedFile);
       });

@@ -89,7 +89,7 @@ async function mockSessionEndpoint(page: Page) {
   return { isDisabled: () => disabled };
 }
 
-test("Quit Extension closes the locator until the dev server restarts", async ({
+test("Quit closes the locator until the dev server restarts", async ({
   page
 }) => {
   await mockSettingsEndpoint(page);
@@ -127,7 +127,39 @@ test("Quit Extension closes the locator until the dev server restarts", async ({
   ).toHaveCount(0);
 });
 
-test("Copy MCP Prompt puts an agent-ready setup message on the clipboard", async ({
+test("Hide removes the button for this page but keeps the locator working", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  await mockSessionEndpoint(page);
+  await page.goto("/");
+
+  const launcher = page.locator("[data-astro-ai-locator-launcher]");
+  await expect(launcher).toBeVisible();
+  await launcher.click();
+  await page.locator("[data-ui-hide]").click();
+
+  await expect(page.locator("[data-astro-ai-locator-toast]")).toContainText(
+    "Reload the page to bring it back"
+  );
+  await expect(launcher).toHaveCount(0);
+  await expect(page.locator("[data-astro-ai-locator-popover]")).toHaveCount(0);
+
+  // 버튼만 사라졌을 뿐 선택 기능은 그대로다.
+  await page.getByTestId("card-alpha").hover();
+  await page.keyboard.down("Alt");
+  await expect(page.locator("[data-astro-ai-locator-overlay]")).toBeVisible();
+  await expect(
+    page.locator("[data-astro-ai-locator-overlay] .label")
+  ).toHaveText(/^<h2>│Card\.astro│\d+:\d+$/u);
+  await page.keyboard.up("Alt");
+
+  // 새로고침이 유일한 복구 경로다.
+  await page.reload();
+  await expect(page.locator("[data-astro-ai-locator-launcher]")).toBeVisible();
+});
+
+test("MCP Prompt puts an agent-ready setup message on the clipboard", async ({
   page
 }) => {
   await mockSettingsEndpoint(page);
@@ -139,13 +171,28 @@ test("Copy MCP Prompt puts an agent-ready setup message on the clipboard", async
   // Located by attribute, not accessible name: the label itself is asserted
   // below and a name-based locator would stop matching when it flips.
   const copyButton = page.locator("[data-ui-copy-mcp]");
-  await expect(copyButton).toHaveText("Copy MCP Prompt");
+  await expect(copyButton).toHaveText("MCP Prompt");
 
   // Quit sits left of Copy, and Copy carries the active overlay color.
   await expect(page.locator(".footer .footer-button")).toHaveText([
-    "Quit Extension",
-    "Copy MCP Prompt"
+    "",
+    "Quit",
+    "MCP Prompt"
   ]);
+  await expect(page.locator("[data-ui-hide]")).toHaveAttribute(
+    "aria-label",
+    "Hide the button until reload"
+  );
+  // 아이콘이 28px 칸을 가져간 뒤로 남은 폭이 좁다. 버튼은 nowrap 이고 `1fr` 칸은
+  // 콘텐츠만큼 늘어나므로, 라벨이 길면 버튼이 아니라 **푸터가** 팝오버 밖으로 넘친다.
+  // 실측: `Copy MCP Prompt` 이던 시절 footer 는 274px 로 258px 팝오버를 14px 넘겼다.
+  const footerFit = await page
+    .locator("[data-astro-ai-locator-popover] .footer")
+    .evaluate((footer) => ({
+      scrollWidth: footer.scrollWidth,
+      clientWidth: footer.clientWidth
+    }));
+  expect(footerFit.scrollWidth).toBeLessThanOrEqual(footerFit.clientWidth);
   await expect(copyButton).toHaveCSS("background-color", "rgb(124, 58, 237)");
 
   await copyButton.click();
@@ -169,7 +216,7 @@ test("Copy MCP Prompt puts an agent-ready setup message on the clipboard", async
     }
   });
 
-  await expect(copyButton).toHaveText("Copy MCP Prompt");
+  await expect(copyButton).toHaveText("MCP Prompt");
 });
 
 test("Alt hover reveals the page map, annotated parent, current target, and structured label", async ({
@@ -828,6 +875,32 @@ test("Copy As does not copy when registration fails", async ({ page }) => {
   ).toContainText("Registration failed with HTTP 500");
 });
 
+test("a 410 from registration tears this tab down like Quit did elsewhere", async ({
+  page
+}) => {
+  await mockSettingsEndpoint(page);
+  await page.route("**/@astro-inspector/register", async (route) => {
+    await route.fulfill({
+      status: 410,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Locator is closed for this dev server" })
+    });
+  });
+  await page.goto("/");
+
+  const launcher = page.locator("[data-astro-ai-locator-launcher]");
+  await expect(launcher).toBeVisible();
+
+  await page
+    .getByTestId("card-alpha")
+    .click({ modifiers: ["Alt"], position: { x: 4, y: 4 } });
+
+  await expect(page.locator("[data-astro-ai-locator-toast]")).toContainText(
+    "Restart the dev server"
+  );
+  await expect(launcher).toHaveCount(0);
+});
+
 test("component call-site metadata reaches its rendered child DOM", async ({
   page
 }) => {
@@ -1343,6 +1416,11 @@ test("the floating launcher exposes the settings hierarchy", async ({
     await expect(heading).toHaveCSS("font-weight", "600");
   }
   await expect(popover.getByText(/^Drag to move\./u)).toHaveCount(0);
+  // Hide 아이콘은 28px 컬럼을 꽉 채우고 패딩이 없어야 SVG가 안 잘리고 중앙 정렬된다.
+  const hideButton = page.locator("[data-ui-hide]");
+  await expect(hideButton).toHaveCSS("padding", "0px");
+  const hideBox = await hideButton.boundingBox();
+  expect(hideBox?.width).toBeCloseTo(28, 0);
   await expect(popover.locator("[data-ui-color-chip]")).toHaveCount(4);
   const preferenceRows = popover.locator(".preference-row");
   await expect(preferenceRows).toHaveCount(2);
